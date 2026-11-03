@@ -328,3 +328,8 @@ function route() {
 load(); updateBadge(); window.addEventListener('hashchange', route); route();
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+
+(function themeBtn() { const b = $('#themeBtn'); if (!b || !window.PPTheme) return; const L = {auto: 'Auto', light: 'Light', dark: 'Dark'}, ICON = {auto: '◐', light: '☀', dark: '☾'};
+  const show = () => { const v = PPTheme.get(); b.textContent = ICON[v] + ' ' + L[v]; b.setAttribute('aria-label', 'Colour mode: ' + L[v] + '. Press to change.'); };
+  b.addEventListener('click', () => { const v = PPTheme.get(); PPTheme.set(v === 'auto' ? 'light' : v === 'light' ? 'dark' : 'auto'); show(); });
+  show(); })();

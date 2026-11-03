@@ -107,6 +107,15 @@ try:
     pl.select_option('#perday','5'); pl.wait_for_timeout(200); chk('5/day one day',pl.locator('[data-day]').count()==1)
     pl.locator('[data-posted]').first.click(); pl.wait_for_timeout(200); chk('mark posted',pl.locator('[data-posted]').count()==4)
     chk('posted persists',pl.evaluate("JSON.parse(localStorage.getItem('pinprofit.v1')).pins.filter(p=>p.status==='published').length")==1)
+    # theme
+    th=ctx.new_page(); th.goto(U); th.wait_for_timeout(200)
+    bg=lambda: th.evaluate("getComputedStyle(document.body).backgroundColor")
+    th.click('#themeBtn'); chk('light mode','Light' in th.inner_text('#themeBtn') and th.evaluate("document.documentElement.dataset.theme")=='light')
+    lb=bg(); th.click('#themeBtn'); chk('dark mode',th.evaluate("document.documentElement.dataset.theme")=='dark' and bg()!=lb)
+    th.reload(); th.wait_for_timeout(200); chk('theme persists',th.evaluate("document.documentElement.dataset.theme")=='dark')
+    th.screenshot(path='/tmp/pp_dark.png')
+    th.click('#themeBtn'); chk('back to auto',th.evaluate("document.documentElement.dataset.theme||''")=='' and 'Auto' in th.inner_text('#themeBtn'))
+    dk=b.new_context(color_scheme='dark').new_page(); dk.goto(U); chk('auto follows system dark',dk.evaluate("getComputedStyle(document.body).backgroundColor")!=lb)
     # pwa
     mf=ctx.new_page(); r=mf.goto('http://localhost:8782/manifest.webmanifest'); mj=r.json(); chk('manifest',mj['display']=='standalone' and len(mj['icons'])==2)
     for ic in mj['icons']: chk('icon '+ic['src'],mf.goto('http://localhost:8782/'+ic['src']).status==200)
