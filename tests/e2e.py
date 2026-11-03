@@ -116,6 +116,14 @@ try:
     th.screenshot(path='/tmp/pp_dark.png')
     th.click('#themeBtn'); chk('back to auto',th.evaluate("document.documentElement.dataset.theme||''")=='' and 'Auto' in th.inner_text('#themeBtn'))
     dk=b.new_context(color_scheme='dark').new_page(); dk.goto(U); chk('auto follows system dark',dk.evaluate("getComputedStyle(document.body).backgroundColor")!=lb)
+    # install
+    ins=ctx.new_page(); ins.goto(U); ins.wait_for_timeout(300)
+    chk('install steps shown','Add to Home Screen' in ins.inner_text('#install'))
+    chk('install btn hidden by default',ins.locator('#installBtn').is_hidden())
+    ins.evaluate("window.__p=0;const ev=new Event('beforeinstallprompt');ev.prompt=()=>{window.__p++;return Promise.resolve()};ev.userChoice=Promise.resolve({outcome:'accepted'});window.dispatchEvent(ev)"); ins.wait_for_timeout(200)
+    chk('install btn shown',ins.locator('#installBtn').is_visible())
+    ins.click('#installBtn'); ins.wait_for_timeout(200); chk('install prompt called',ins.evaluate('window.__p')==1 and ins.locator('#installBtn').is_hidden())
+    chk('no floating cards',ins.locator('.mock,.marq').count()==0)
     # pwa
     mf=ctx.new_page(); r=mf.goto('http://localhost:8782/manifest.webmanifest'); mj=r.json(); chk('manifest',mj['display']=='standalone' and len(mj['icons'])==2)
     for ic in mj['icons']: chk('icon '+ic['src'],mf.goto('http://localhost:8782/'+ic['src']).status==200)

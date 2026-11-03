@@ -1,4 +1,5 @@
 document.documentElement.classList.add('js');
+let deferredInstall = null;
 'use strict';
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -307,14 +308,15 @@ function renderHome() {
   const feat = [['🔗', 'Paste a link', 'Amazon or Flipkart. PinProfit reads the product name from the link text.'], ['✍️', '5 pin versions', 'Festive, college, minimal, budget and party styles, each with its own title and description.'], ['📋', 'One-click copy', 'Copy the title, description, alt text or everything at once.'], ['🖼️', 'Pin image maker', 'Use your own photo, pick a layout and download a 1000×1500 PNG.'], ['🏷️', 'Affiliate ID added for you', 'Save your ID once and it is added to plain product links.'], ['📈', 'Earnings tracker', 'Log clicks and earnings and see which style works best for you.']];
   const faq = [['Is it free?', 'Yes. It runs in your browser and there is nothing to pay.'], ['Does it use AI or read Amazon pages?', 'No. It builds the text from the product name in the link and what you type, so it never invents prices or product details.'], ['Where is my data stored?', 'Only in your browser on this device. Nothing you type or upload is sent to a server.'], ['Will I earn money?', 'PinProfit saves you time writing pins. It cannot promise clicks or sales, and you still need your own affiliate account.']];
   $('#app').innerHTML = `<section class="hero home"><div class="blobs" aria-hidden="true"><i></i><i></i><i></i></div><div class="hcopy"><span class="chip alt">Free · no sign-up · runs in your browser</span><h1 aria-label="Turn a product link into pins that are ready to post.">${hw('Turn a product link into', 0)} ${hw('pins that are', 5, 'grad')} ${hw('ready to post.', 8, 'grad')}</h1><p class="lead">Paste an Amazon or Flipkart link. Get five Pinterest pin versions, a pin image and a tracker, all in one place.</p><p class="row"><a class="btn pri big" href="#/create">Create my pins</a><a class="btn big" href="#how">See how it works</a></p></div>
-    <div class="hvis" aria-hidden="true"><img class="logo float" src="logo.png" width="200" height="200" alt=""><div class="mock mk1"><b>Pink Cotton Kurti: Everyday Ethnic Outfit Inspiration</b><span>61/100</span></div><div class="mock mk2">Copied ✓</div><div class="mock mk3"><span class="tile"></span><b>Festive</b></div></div></section>
-  <div class="marq" aria-hidden="true"><div class="track">${[0, 1].map(() => '<span>✨ Festive</span><span>🎓 College</span><span>🤍 Minimal</span><span>💸 Budget</span><span>🎉 Party</span><span>📌 Pin-ready</span>').join('')}</div></div>
+    <div class="hvis" aria-hidden="true"><img class="logo float" src="logo.png" width="200" height="200" alt=""></div></section>
+  <div class="stylerow" aria-hidden="true">${['✨ Festive', '🎓 College', '🤍 Minimal', '💸 Budget', '🎉 Party'].map(x => `<span class="chip">${x}</span>`).join('')}</div>
   <section id="how" class="band rv"><h2>How it works</h2><ol class="steps3"><li><span class="step">1</span><b>Paste</b><span>your product link</span></li><li><span class="step">2</span><b>Copy</b><span>the pin you like best</span></li><li><span class="step">3</span><b>Post</b><span>on Pinterest and track it</span></li></ol></section>
   <section class="rv"><h2>Everything you need to post faster</h2><div class="fgrid">${feat.map((f, i) => `<article class="card feat rv" style="--d:${i * 70}ms"><span class="ico" aria-hidden="true">${f[0]}</span><h3>${esc(f[1])}</h3><p>${esc(f[2])}</p></article>`).join('')}</div></section>
   <section class="rv card honest"><h2>Honest by design</h2><ul><li>No fake AI and no scraping of shop pages.</li><li>A price appears only if you type it.</li><li>The link check says an ID is <b>present</b>, never "verified".</li><li>An affiliate disclosure line is added, as programmes expect.</li></ul></section>
   <section class="rv"><h2>Questions</h2>${faq.map(q => `<details class="faq"><summary>${esc(q[0])}</summary><p>${esc(q[1])}</p></details>`).join('')}</section>
+  <section class="rv card" id="install"><h2>Use it like an app</h2><p>Add PinProfit to your home screen. It opens full screen and keeps working without internet after the first visit.</p><p class="row"><button class="btn pri" id="installHome" type="button" hidden>Install PinProfit</button></p><ul class="small"><li><b>Android (Chrome):</b> tap the ⋮ menu, then <b>Install app</b> or <b>Add to Home screen</b>.</li><li><b>iPhone (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</li><li><b>Laptop (Chrome or Edge):</b> click the install icon at the right end of the address bar.</li></ul></section>
   <section class="rv cta card"><h2>Ready to make your first pin?</h2><a class="btn pri big" href="#/create">Create my pins</a></section>`;
-  revealInit();
+  installUi(); revealInit();
   const hv = $('.hvis'); if (hv && !matchMedia('(prefers-reduced-motion: reduce)').matches) { hv.addEventListener('pointermove', e => { const r = hv.getBoundingClientRect(); hv.style.setProperty('--mx', ((e.clientX - r.left) / r.width - .5).toFixed(2)); hv.style.setProperty('--my', ((e.clientY - r.top) / r.height - .5).toFixed(2)); }); hv.addEventListener('pointerleave', () => { hv.style.setProperty('--mx', 0); hv.style.setProperty('--my', 0); }); }
 }
 function revealInit() {
@@ -343,3 +345,15 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   const show = () => { const v = PPTheme.get(); b.textContent = ICON[v] + ' ' + L[v]; b.setAttribute('aria-label', 'Colour mode: ' + L[v] + '. Press to change.'); };
   b.addEventListener('click', () => { const v = PPTheme.get(); PPTheme.set(v === 'auto' ? 'light' : v === 'light' ? 'dark' : 'auto'); show(); });
   show(); })();
+
+/* ---------- install button ---------- */
+function installUi() {
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const btns = [$('#installBtn'), $('#installHome')].filter(Boolean);
+  btns.forEach(b => { b.hidden = !deferredInstall || standalone; });
+  const sec = $('#install'); if (sec && standalone) sec.hidden = true;
+}
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; installUi(); });
+addEventListener('appinstalled', () => { deferredInstall = null; installUi(); toast('PinProfit installed'); });
+document.addEventListener('click', async e => { if (!e.target.closest('#installBtn, #installHome') || !deferredInstall) return; const p = deferredInstall; deferredInstall = null; installUi(); try { await p.prompt(); await p.userChoice; } catch (err) { /* dismissed */ } });
+installUi();

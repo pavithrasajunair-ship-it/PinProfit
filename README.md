@@ -18,7 +18,7 @@ Paste an Amazon or Flipkart product link and get 5 ready-to-post Pinterest pin v
 Pinterest limits: title up to 100 characters, description up to 800 (about 500 reads best), alt text up to 500.
 
 ## Run / test
-Static site, no build. `node tests/unit.js` (30) and `python3 tests/e2e.py` (64, needs Playwright).
+Static site, no build. `node tests/unit.js` (30) and `python3 tests/e2e.py` (69, needs Playwright).
 Deploy on Vercel: Framework "Other", no build command.
 
 ## Also included
