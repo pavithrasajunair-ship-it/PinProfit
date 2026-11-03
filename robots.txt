@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pinprofit-eta.vercel.app/sitemap.xml
