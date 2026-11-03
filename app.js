@@ -1,3 +1,4 @@
+document.documentElement.classList.add('js');
 'use strict';
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -178,12 +179,35 @@ function onTrack(e) { const el = e.target.closest('[data-k]'); const card = el &
 document.addEventListener('input', onTrack); document.addEventListener('change', onTrack);
 document.addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (!d) return; const card = d.closest('.sp-row'); if (!confirm('Delete this saved pin?')) return; DB.pins = DB.pins.filter(x => x.id !== card.dataset.id); save(); renderSaved(); });
 
+/* ---------- home view ---------- */
+function renderHome() {
+  const feat = [['🔗', 'Paste a link', 'Amazon or Flipkart. PinProfit reads the product name from the link text.'], ['✍️', '5 pin versions', 'Festive, college, minimal, budget and party styles, each with its own title and description.'], ['📋', 'One-click copy', 'Copy the title, description, alt text or everything at once.'], ['🖼️', 'Pin image maker', 'Use your own photo, pick a layout and download a 1000×1500 PNG.'], ['🏷️', 'Affiliate ID added for you', 'Save your ID once and it is added to plain product links.'], ['📈', 'Earnings tracker', 'Log clicks and earnings and see which style works best for you.']];
+  const faq = [['Is it free?', 'Yes. It runs in your browser and there is nothing to pay.'], ['Does it use AI or read Amazon pages?', 'No. It builds the text from the product name in the link and what you type, so it never invents prices or product details.'], ['Where is my data stored?', 'Only in your browser on this device. Nothing you type or upload is sent to a server.'], ['Will I earn money?', 'PinProfit saves you time writing pins. It cannot promise clicks or sales, and you still need your own affiliate account.']];
+  $('#app').innerHTML = `<section class="hero home"><div class="hcopy"><span class="chip alt">Free · no sign-up · runs in your browser</span><h1>Turn a product link into pins that are ready to post.</h1><p class="lead">Paste an Amazon or Flipkart link. Get five Pinterest pin versions, a pin image and a tracker, all in one place.</p><p class="row"><a class="btn pri big" href="#/create">Create my pins</a><a class="btn big" href="#how">See how it works</a></p></div>
+    <div class="hvis" aria-hidden="true"><img class="logo float" src="logo.png" width="200" height="200" alt=""><div class="mock mk1"><b>Pink Cotton Kurti: Everyday Ethnic Outfit Inspiration</b><span>61/100</span></div><div class="mock mk2">Copied ✓</div></div></section>
+  <section id="how" class="band rv"><h2>How it works</h2><ol class="steps3"><li><span class="step">1</span><b>Paste</b><span>your product link</span></li><li><span class="step">2</span><b>Copy</b><span>the pin you like best</span></li><li><span class="step">3</span><b>Post</b><span>on Pinterest and track it</span></li></ol></section>
+  <section class="rv"><h2>Everything you need to post faster</h2><div class="fgrid">${feat.map((f, i) => `<article class="card feat rv" style="--d:${i * 70}ms"><span class="ico" aria-hidden="true">${f[0]}</span><h3>${esc(f[1])}</h3><p>${esc(f[2])}</p></article>`).join('')}</div></section>
+  <section class="rv card honest"><h2>Honest by design</h2><ul><li>No fake AI and no scraping of shop pages.</li><li>A price appears only if you type it.</li><li>The link check says an ID is <b>present</b>, never "verified".</li><li>An affiliate disclosure line is added, as programmes expect.</li></ul></section>
+  <section class="rv"><h2>Questions</h2>${faq.map(q => `<details class="faq"><summary>${esc(q[0])}</summary><p>${esc(q[1])}</p></details>`).join('')}</section>
+  <section class="rv cta card"><h2>Ready to make your first pin?</h2><a class="btn pri big" href="#/create">Create my pins</a></section>`;
+  revealInit();
+}
+function revealInit() {
+  const els = $$('.rv'); const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce || !('IntersectionObserver' in window)) { els.forEach(e => e.classList.add('in')); return; }
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), {threshold: 0.12});
+  els.forEach(e => io.observe(e));
+}
+(function progress() { const bar = document.createElement('div'); bar.id = 'prog'; bar.setAttribute('aria-hidden', 'true'); document.body.prepend(bar); let t = false;
+  const up = () => { t = false; const m = document.documentElement.scrollHeight - innerHeight; bar.style.transform = `scaleX(${m > 0 ? Math.min(1, scrollY / m) : 0})`; };
+  addEventListener('scroll', () => { if (!t) { t = true; requestAnimationFrame(up); } }, {passive: true}); })();
+
 /* ---------- router ---------- */
 function route() {
-  const r = (location.hash.match(/^#\/(\w+)/) || [])[1]; const name = ['create', 'image', 'saved'].includes(r) ? r : 'create';
+  const r = (location.hash.match(/^#\/(\w+)/) || [])[1]; const name = ['home', 'create', 'image', 'saved'].includes(r) ? r : 'home';
   $$('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.t === name ? 'page' : 'false'));
   const app = $('#app'); const fresh = app.cloneNode(false); app.replaceWith(fresh);   // drops old listeners
-  ({create: renderCreate, image: renderImage, saved: renderSaved})[name](); window.scrollTo(0, 0);
-  document.title = ({create: 'Create pins', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
+  ({home: renderHome, create: renderCreate, image: renderImage, saved: renderSaved})[name](); window.scrollTo(0, 0);
+  document.title = name === 'home' ? 'PinProfit – Turn a product link into ready-to-post Pinterest pins' : ({create: 'Create pins', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
 }
 load(); updateBadge(); window.addEventListener('hashchange', route); route();
