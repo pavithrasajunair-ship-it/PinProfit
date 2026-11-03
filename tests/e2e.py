@@ -80,6 +80,23 @@ try:
     J.dump(evil,open('/tmp/evil.json','w')); pg.set_input_files('#bkIn','/tmp/evil.json'); pg.wait_for_timeout(400)
     st=pg.evaluate("JSON.parse(localStorage.getItem('pinprofit.v1'))"); p0=st['pins'][0]
     chk('import sanitised',p0['url']=='' and p0['store']=='other' and p0['status']=='drafted' and len(p0['earn'])<=9 and pg.locator('.sp-row img').count()==0)
+    # bulk
+    bk=ctx.new_page(); bk.goto(U+'#/create'); bk.fill('#atag','bulk-21') if False else None
+    bk.evaluate("localStorage.setItem('pinprofit.v1',JSON.stringify({prefs:{amazon:'bulk-21',setup:'done'},pins:[]}))"); bk.goto(U+'#/bulk'); bk.reload(); bk.wait_for_timeout(300)
+    links=['https://www.amazon.in/Women-Pink-Cotton-Kurti/dp/B09AAA1111','https://www.amazon.in/Women-Black-Party-Dress/dp/B09BBB2222?tag=other-21','https://amzn.to/xyz123','not a link','https://www.amazon.in/Women-Pink-Cotton-Kurti/dp/B09AAA1111']
+    bk.fill('#bt','\n'.join(links)); bk.click('#bf button[type=submit]'); bk.wait_for_timeout(400)
+    chk('bulk rows dedup',bk.locator('[data-r]').count()==4)
+    chk('bulk tag added','bulk-21' in bk.inner_text('#bout'))
+    bk.locator('[data-bc=link]').first.click(); chk('bulk link copied','tag=bulk-21' in bk.evaluate('navigator.clipboard.readText()'))
+    chk('bulk keeps other tag',bk.locator('[data-bc=link]').nth(1).count()==1)
+    chk('short link asks name',bk.locator('[data-bname]').nth(2).input_value()=='')
+    bk.locator('[data-bname]').nth(2).fill('Green Cotton Top'); bk.wait_for_timeout(200); chk('short link pin after name',bk.locator('[data-bc=title]').count()==3)
+    bk.select_option('[data-bstyle] >> nth=0','2'); bk.wait_for_timeout(150)
+    bk.click('#bsaveall'); bk.wait_for_timeout(300); chk('save all',bk.evaluate("JSON.parse(localStorage.getItem('pinprofit.v1')).pins.length")==3)
+    bk.click('#bcopyall'); chk('copy all','Kurti' in bk.evaluate('navigator.clipboard.readText()') and '----' in bk.evaluate('navigator.clipboard.readText()'))
+    bk.fill('#bt','\n'.join('https://www.amazon.in/Dress-%d/dp/B09CCC%04d'%(i,i) for i in range(30))); bk.click('#bf button[type=submit]'); bk.wait_for_timeout(500)
+    chk('bulk max 20',bk.locator('[data-r]').count()==20)
+    bk.fill('#bt','https://www.amazon.in/<img src=x onerror=alert(1)>/dp/B09DDD0001'); bk.click('#bf button[type=submit]'); bk.wait_for_timeout(300); chk('bulk escaped',bk.locator('#bout img').count()==0)
     # pwa
     mf=ctx.new_page(); r=mf.goto('http://localhost:8782/manifest.webmanifest'); mj=r.json(); chk('manifest',mj['display']=='standalone' and len(mj['icons'])==2)
     for ic in mj['icons']: chk('icon '+ic['src'],mf.goto('http://localhost:8782/'+ic['src']).status==200)
@@ -89,7 +106,7 @@ try:
     # mobile
     m=ctx.new_page(); m.set_viewport_size({'width':375,'height':800}); m.goto(U)
     m.wait_for_timeout(200); chk('home no hscroll',m.evaluate('document.documentElement.scrollWidth<=window.innerWidth'))
-    for h in ['#/','#/create','#/image','#/saved']:
+    for h in ['#/','#/create','#/bulk','#/image','#/saved']:
         m.goto(U+h); m.wait_for_timeout(250)
         chk('no hscroll '+h,m.evaluate('document.documentElement.scrollWidth<=window.innerWidth'))
     m.screenshot(path='/tmp/pp_mobile.png')

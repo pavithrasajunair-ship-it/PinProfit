@@ -23,7 +23,7 @@ async function doCopy(btn, text, label) {
 
 /* ---------- state ---------- */
 const S = {form: {url: '', title: '', category: 'other', colour: '', price: '', details: '', touched: {}}, link: null, results: null, counter: 0, studio: {img: null, imgName: '', template: 'band', theme: 'rose', headline: '', small: '', cta: 'Shop the look'}};
-const disclosureText = () => { if (DB.prefs.disclosure !== 'on') return ''; const amz = S.link && S.link.store === 'amazon'; return DB.prefs.discText === 'amazon' && amz ? PP.DISCLOSURES.amazon : DB.prefs.discText === 'amazon' ? PP.DISCLOSURES.general : PP.DISCLOSURES.general; };
+const disclosureText = (l = S.link) => { if (DB.prefs.disclosure !== 'on') return ''; const amz = l && l.store === 'amazon'; return DB.prefs.discText === 'amazon' && amz ? PP.DISCLOSURES.amazon : DB.prefs.discText === 'amazon' ? PP.DISCLOSURES.general : PP.DISCLOSURES.general; };
 
 /* ---------- create view ---------- */
 const STORE_NAME = {amazon: 'Amazon', flipkart: 'Flipkart', meesho: 'Meesho', myntra: 'Myntra', other: 'Other shop'};
@@ -222,6 +222,59 @@ function onTrack(e) { const el = e.target.closest('[data-k]'); const card = el &
 document.addEventListener('input', onTrack); document.addEventListener('change', onTrack);
 document.addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (!d) return; const card = d.closest('.sp-row'); if (!confirm('Delete this saved pin?')) return; DB.pins = DB.pins.filter(x => x.id !== card.dataset.id); save(); renderSaved(); });
 
+/* ---------- many links at once ---------- */
+const BULK_MAX = 20;
+S.bulk = {text: '', rows: []};
+function bulkPin(r) {
+  if (!r.title.trim()) return null;
+  return PP.generate({title: r.title, category: r.cat, colour: r.colour, details: '', price: '', disclosure: disclosureText(r.link), counter: r.counter})[r.style];
+}
+function bulkRowHtml(r, i) {
+  const l = r.link, fl = r.fl, v = r.ok ? bulkPin(r) : null;
+  const head = `<div class="row sp"><span><span class="chip">${esc(STORE_NAME[l.store] || 'Link')}</span> <span class="small mono">${esc(r.raw.length > 60 ? r.raw.slice(0, 60) + '…' : r.raw)}</span></span></div>`;
+  if (!r.ok) return `<article class="card" data-r="${i}">${head}${l.issues.map(x => `<p class="note error">✕ ${esc(x.msg)}</p>`).join('') || '<p class="note error">✕ This does not look like a web link.</p>'}</article>`;
+  const note = fl.added ? `<p class="note ok small">✓ Your ID (${esc(fl.id)}) was added to this link.</p>` : PP.checkAffiliate(l, myIds()).map(x => `<p class="note ${x.level} small">${x.level === 'ok' ? '✓' : '⚠'} ${esc(x.msg)}</p>`).join('');
+  return `<article class="card bulkrow" data-r="${i}">${head}${note}
+    <div class="grid2"><div><label for="bn${i}">Product name</label><input id="bn${i}" data-bname type="text" maxlength="120" value="${esc(r.title)}" placeholder="Type the product name"></div>
+    <div><label for="bs${i}">Style</label><select id="bs${i}" data-bstyle>${PP.ANGLES.map((x, k) => `<option value="${k}" ${k === r.style ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div></div>
+    <div class="bpin" id="bp${i}">${bulkPinHtml(r, i, v)}</div></article>`;
+}
+function bulkPinHtml(r, i, v) {
+  if (!v) return '<p class="note info">ℹ Type the product name to get the pin.</p>';
+  return `<h3>Title <span class="cnt">${v.title.length}/100</span></h3><p class="val">${esc(v.title)}</p><h3>Description <span class="cnt">${v.description.length}/500</span></h3><p class="val desc">${esc(v.description)}</p>
+  <div class="actions"><button class="btn sm" data-bc="title" data-i="${i}" type="button">Copy title</button><button class="btn sm" data-bc="desc" data-i="${i}" type="button">Copy description</button><button class="btn sm" data-bc="link" data-i="${i}" type="button">Copy link</button><button class="btn sm pri" data-bc="all" data-i="${i}" type="button">Copy everything</button><button class="btn sm" data-bsave data-i="${i}" type="button" ${r.saved ? 'disabled' : ''}>${r.saved ? 'Saved ✓' : 'Save to my pins'}</button></div>`;
+}
+const bulkText = (r, v) => v.text + (r.fl.url ? '\n\nLINK\n' + r.fl.url : '');
+function renderBulk() {
+  $('#app').innerHTML = `<section class="hero"><h1>Many links at once</h1><p class="mute">Paste up to ${BULK_MAX} Amazon or Flipkart links, one per line. You get a pin for each, with your affiliate ID added if you saved it.</p></section>
+  <form id="bf" class="card" novalidate><label for="bt">Product links (one per line)</label><textarea id="bt" rows="7" maxlength="20000" placeholder="https://www.amazon.in/...&#10;https://www.flipkart.com/...">${esc(S.bulk.text)}</textarea><p id="bmsg" class="err" role="alert"></p><p><button class="btn pri" type="submit">Make my pins</button></p></form><div id="bout" aria-live="polite"></div>`;
+  const out = () => {
+    const rows = S.bulk.rows; if (!rows.length) { $('#bout').innerHTML = ''; return; }
+    const okRows = rows.filter(r => r.ok && r.title.trim());
+    $('#bout').innerHTML = `<div class="row sp rh"><h2>${rows.length} link${rows.length > 1 ? 's' : ''}</h2><span class="row"><button class="btn" id="bcopyall" type="button">Copy all</button><button class="btn" id="bsaveall" type="button">Save all to my pins</button></span></div><div class="plist">${rows.map(bulkRowHtml).join('')}</div>`;
+  };
+  $('#bf').addEventListener('submit', e => { e.preventDefault();
+    const raw = $('#bt').value; S.bulk.text = raw;
+    const seen = new Set(), lines = raw.split(/\r?\n/).map(x => x.trim()).filter(x => x && !seen.has(x) && seen.add(x));
+    if (!lines.length) { $('#bmsg').textContent = 'Paste at least one link.'; return; }
+    $('#bmsg').textContent = lines.length > BULK_MAX ? `Only the first ${BULK_MAX} links were used.` : '';
+    S.bulk.rows = lines.slice(0, BULK_MAX).map(x => { const l = PP.parseLink(x); const t = l.ok ? l.slugTitle : ''; return {raw: x, link: l, ok: l.ok, fl: l.ok ? finalLink(l) : null, title: t, cat: PP.detectCategory(t), colour: PP.detectColour(t), style: 0, counter: 0, saved: false}; });
+    out();
+  });
+  const bo = $('#bout');
+  bo.addEventListener('input', e => { const el = e.target.closest('[data-bname]'); if (!el) return; const i = +el.closest('[data-r]').dataset.r, r = S.bulk.rows[i]; r.title = el.value; r.cat = PP.detectCategory(r.title); r.colour = PP.detectColour(r.title); r.saved = false; $('#bp' + i).innerHTML = bulkPinHtml(r, i, bulkPin(r)); });
+  bo.addEventListener('change', e => { const el = e.target.closest('[data-bstyle]'); if (!el) return; const i = +el.closest('[data-r]').dataset.r, r = S.bulk.rows[i]; r.style = +el.value; r.saved = false; $('#bp' + i).innerHTML = bulkPinHtml(r, i, bulkPin(r)); });
+  const savePin = (r, v) => { DB.pins.unshift({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Date.now(), title: v.title, store: r.link.store, url: r.fl.url, angle: v.angle, label: v.label, board: v.board, status: 'drafted', clicks: '', earn: '', note: ''}); r.saved = true; };
+  bo.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'bcopyall') { const t = S.bulk.rows.filter(r => r.ok && r.title.trim()).map(r => bulkText(r, bulkPin(r))).join('\n\n----------\n\n'); return doCopy(b, t, 'All pins'); }
+    if (b.id === 'bsaveall') { let n = 0; S.bulk.rows.forEach(r => { const v = r.ok && !r.saved ? bulkPin(r) : null; if (v) { savePin(r, v); n++; } }); save(); updateBadge(); toast(n ? `Saved ${n} pin${n > 1 ? 's' : ''}` : 'Nothing new to save'); return out(); }
+    const i = b.dataset.i; if (i === undefined) return; const r = S.bulk.rows[+i], v = r && bulkPin(r); if (!v) return;
+    if (b.dataset.bsave !== undefined) { savePin(r, v); save(); updateBadge(); toast('Saved to My pins'); b.textContent = 'Saved ✓'; b.disabled = true; return; }
+    const map = {title: v.title, desc: v.description, link: r.fl.url, all: bulkText(r, v)};
+    doCopy(b, map[b.dataset.bc], b.dataset.bc === 'all' ? 'Everything' : b.dataset.bc === 'link' ? 'Link' : b.dataset.bc === 'title' ? 'Title' : 'Description'); });
+  out();
+}
+
 /* ---------- home view ---------- */
 function renderHome() {
   const feat = [['🔗', 'Paste a link', 'Amazon or Flipkart. PinProfit reads the product name from the link text.'], ['✍️', '5 pin versions', 'Festive, college, minimal, budget and party styles, each with its own title and description.'], ['📋', 'One-click copy', 'Copy the title, description, alt text or everything at once.'], ['🖼️', 'Pin image maker', 'Use your own photo, pick a layout and download a 1000×1500 PNG.'], ['🏷️', 'Affiliate ID added for you', 'Save your ID once and it is added to plain product links.'], ['📈', 'Earnings tracker', 'Log clicks and earnings and see which style works best for you.']];
@@ -247,11 +300,11 @@ function revealInit() {
 
 /* ---------- router ---------- */
 function route() {
-  const r = (location.hash.match(/^#\/(\w+)/) || [])[1]; const name = ['home', 'create', 'image', 'saved'].includes(r) ? r : 'home';
+  const r = (location.hash.match(/^#\/(\w+)/) || [])[1]; const name = ['home', 'create', 'bulk', 'image', 'saved'].includes(r) ? r : 'home';
   $$('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.t === name ? 'page' : 'false'));
   const app = $('#app'); const fresh = app.cloneNode(false); app.replaceWith(fresh);   // drops old listeners
-  ({home: renderHome, create: renderCreate, image: renderImage, saved: renderSaved})[name](); window.scrollTo(0, 0);
-  document.title = name === 'home' ? 'PinProfit – Turn a product link into ready-to-post Pinterest pins' : ({create: 'Create pins', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
+  ({home: renderHome, create: renderCreate, bulk: renderBulk, image: renderImage, saved: renderSaved})[name](); window.scrollTo(0, 0);
+  document.title = name === 'home' ? 'PinProfit – Turn a product link into ready-to-post Pinterest pins' : ({create: 'Create pins', bulk: 'Many links', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
 }
 load(); updateBadge(); window.addEventListener('hashchange', route); route();
 
