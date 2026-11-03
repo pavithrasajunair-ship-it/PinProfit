@@ -7,6 +7,7 @@ Paste an Amazon or Flipkart product link and get 5 ready-to-post Pinterest pin v
 ![My pins](docs/saved.png)
 
 ## Honest by design
+- First-time setup asks if you have an Amazon Associates account (links to signup if not). Once you save your ID, it is added to plain product links automatically; never over an existing tag, never on short links. Check the first link in your affiliate reports. Switch to "paste my own official link" any time.
 - No AI and no scraping: the product name comes from the link text; you add colour, details and price.
 - Price appears only if you type it, as "Under ₹X at the time of posting".
 - The link checker only says an affiliate tag is **present**, never "verified".
@@ -16,5 +17,5 @@ Paste an Amazon or Flipkart product link and get 5 ready-to-post Pinterest pin v
 Pinterest limits: title up to 100 characters, description up to 800 (about 500 reads best), alt text up to 500.
 
 ## Run / test
-Static site, no build. `node tests/unit.js` (27) and `python3 tests/e2e.py` (17, needs Playwright).
+Static site, no build. `node tests/unit.js` (30) and `python3 tests/e2e.py` (23, needs Playwright).
 Deploy on Vercel: Framework "Other", no build command.

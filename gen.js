@@ -104,6 +104,17 @@ const PP = (() => {
     return r;
   }
 
+  /* Adds the user's own tag to a plain product link. Never replaces a tag already there. */
+  function applyTag(link, myIds) {
+    const my = myIds || {};
+    if (!link || !link.ok || link.short || link.tag) return {url: link ? link.url : '', added: false};
+    const id = link.store === 'amazon' ? my.amazon : link.store === 'flipkart' ? my.flipkart : '';
+    const key = link.store === 'amazon' ? 'tag' : 'affid';
+    if (!id || !/^[A-Za-z0-9._-]{2,40}$/.test(id)) return {url: link.url, added: false};
+    try { const u = new URL(link.url); u.searchParams.set(key, id); return {url: u.toString(), added: true, id}; }
+    catch (e) { return {url: link.url, added: false}; }
+  }
+
   /* ---------- reading the product name ---------- */
   function detectCategory(title) { return (CATS.find(c => c.id !== 'other' && c.re.test(title)) || CATS[CATS.length - 1]).id; }
   function detectColour(title) { const t = ' ' + title.toLowerCase().replace(/[-_]/g, ' ') + ' '; return COLOURS.find(c => t.includes(' ' + c + ' ')) || ''; }
@@ -150,6 +161,6 @@ const PP = (() => {
     general: 'Affiliate link: I may earn a small commission if you buy, at no extra cost to you.',
     amazon: 'As an Amazon Associate I earn from qualifying purchases.',
   };
-  return {generate, parseLink, checkAffiliate, detectCategory, detectColour, shortName, priceBucket, titleFromSlug, CATS, ANGLES, DISCLOSURES, COLOURS};
+  return {generate, parseLink, checkAffiliate, applyTag, detectCategory, detectColour, shortName, priceBucket, titleFromSlug, CATS, ANGLES, DISCLOSURES, COLOURS};
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = PP;

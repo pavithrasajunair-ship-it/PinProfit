@@ -44,6 +44,17 @@ try:
     # warnings
     pg.goto(U+'#/create'); pg.fill('#url','https://evil.example.com/x'); pg.wait_for_timeout(300)
     chk('bad link note',len(pg.inner_text('#linkInfo'))>0 or len(pg.inner_text('#titleErr'))>=0)
+    # auto tag + setup guide
+    a=ctx.new_page(); a.goto(U); a.fill('#url','https://www.amazon.in/Women-Pink-Cotton-Kurti/dp/B09XYZ1234'); a.wait_for_timeout(250)
+    chk('setup card shown',a.locator('#setup').count()==1)
+    a.click('[data-setup=no]'); chk('no-account steps','affiliate-program.amazon.in' in a.inner_text('#setup'))
+    a.click('[data-setup=yes]'); a.fill('#atag','mystore-21'); a.wait_for_timeout(200)
+    chk('setup card gone',a.locator('#setup').count()==0)
+    a.fill('#url','https://www.amazon.in/Women-Pink-Cotton-Kurti/dp/B09XYZ1234'); a.wait_for_timeout(250)
+    chk('auto note','added to this link automatically' in a.inner_text('#linkInfo'))
+    a.click('#gf button[type=submit]'); a.wait_for_timeout(400)
+    a.locator('[data-copy=link]').click(); chk('copied link has tag','tag=mystore-21' in a.evaluate('navigator.clipboard.readText()'))
+    a.select_option('#atm','own'); a.wait_for_timeout(200); chk('own mode no auto','automatically' not in a.inner_text('#linkInfo'))
     # mobile
     m=ctx.new_page(); m.set_viewport_size({'width':375,'height':800}); m.goto(U)
     for h in ['#/create','#/image','#/saved']:

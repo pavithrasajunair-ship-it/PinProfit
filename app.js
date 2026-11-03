@@ -2,7 +2,7 @@
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const KEY = 'pinprofit.v1';
-let DB = {prefs: {amazon: '', flipkart: '', disclosure: 'on', discText: 'general'}, pins: []};
+let DB = {prefs: {amazon: '', flipkart: '', disclosure: 'on', discText: 'general', autoTag: 'auto', setup: ''}, pins: []};
 function load() { try { const r = JSON.parse(localStorage.getItem(KEY) || 'null'); if (r && Array.isArray(r.pins)) DB = {prefs: Object.assign(DB.prefs, r.prefs || {}), pins: r.pins}; } catch (e) { /* storage unavailable: run in memory */ } }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { /* ignore */ } updateBadge(); }
 function updateBadge() { const b = $('#savedCount'); if (b) { b.textContent = DB.pins.length; b.hidden = !DB.pins.length; } }
@@ -26,15 +26,27 @@ const disclosureText = () => { if (DB.prefs.disclosure !== 'on') return ''; cons
 
 /* ---------- create view ---------- */
 const STORE_NAME = {amazon: 'Amazon', flipkart: 'Flipkart', meesho: 'Meesho', myntra: 'Myntra', other: 'Other shop'};
+const myIds = () => ({amazon: DB.prefs.amazon.trim(), flipkart: DB.prefs.flipkart.trim()});
+function finalLink(l) { if (!l || !l.ok) return null; return DB.prefs.autoTag === 'auto' ? PP.applyTag(l, myIds()) : {url: l.url, added: false}; }
 function linkNotes() {
   const l = S.link; if (!l) return '';
-  const items = l.issues.concat(PP.checkAffiliate(l, {amazon: DB.prefs.amazon.trim(), flipkart: DB.prefs.flipkart.trim()}));
+  const fl = finalLink(l);
+  const items = l.issues.slice();
+  if (fl && fl.added) items.push({level: 'ok', msg: `Your ID (${fl.id}) was added to this link automatically. Click "Copy link", open it once and check it in your affiliate reports before posting many pins. If it does not count, switch to "I paste my own official link" in My setup.`});
+  else items.push(...PP.checkAffiliate(l, myIds()));
+  if (l.ok && (l.store === 'amazon' || l.store === 'flipkart') && !l.short && !l.tag && !(fl && fl.added)) items.push({level: 'info', msg: DB.prefs.autoTag === 'auto' ? 'Save your ID in My setup and PinProfit will add it for you.' : 'Automatic adding is off. Paste your official affiliate link.'});
   const head = l.ok ? `<span class="chip">${esc(STORE_NAME[l.store])}</span>` : '';
   return head + items.map(i => `<p class="note ${i.level}" role="${i.level === 'error' ? 'alert' : 'status'}">${i.level === 'ok' ? '✓' : i.level === 'warn' ? '⚠' : i.level === 'error' ? '✕' : 'ℹ'} ${esc(i.msg)}</p>`).join('');
+}
+function setupCard() {
+  if (DB.prefs.amazon.trim() || DB.prefs.setup === 'done') return '';
+  if (DB.prefs.setup === 'no') return `<div class="card" id="setup"><h2>Get your Amazon affiliate ID first</h2><ol><li>Sign up free at <a href="https://affiliate-program.amazon.in/" target="_blank" rel="noopener noreferrer">affiliate-program.amazon.in</a> and wait for approval.</li><li>After approval, your <b>Store ID</b> (like <span class="mono">yourname-21</span>) shows at the top of the Associates page.</li><li>Come back, type it under <b>My setup</b>, and PinProfit adds it to your links.</li></ol><p class="small mute">PinProfit cannot check whether you have an account. It only checks the ID looks right.</p><div class="row"><button class="btn" data-setup="yes" type="button">I have my ID now</button><button class="btn" data-setup="skip" type="button">Skip for now</button></div></div>`;
+  return `<div class="card" id="setup"><h2>Quick setup (once)</h2><p>Do you have an Amazon Associates account?</p><div class="row"><button class="btn pri" data-setup="yes" type="button">Yes, I have one</button><button class="btn" data-setup="no" type="button">No, help me create one</button><button class="btn" data-setup="skip" type="button">Skip</button></div></div>`;
 }
 function renderCreate() {
   const f = S.form;
   $('#app').innerHTML = `<section class="hero"><h1>Paste a product link. Get pins ready to post.</h1><p class="mute">Five different pin versions with titles, descriptions, hashtags and alt text. One click copies each part.</p></section>
+  ${setupCard()}
   <form id="gf" class="card" novalidate>
     <h2><span class="step">1</span> The product</h2>
     <label for="url">Product link (Amazon or Flipkart) <span class="mute">optional but recommended</span></label>
@@ -48,9 +60,10 @@ function renderCreate() {
     </div>
     <label for="details">Details you know are true <span class="mute">optional: fabric, sleeves, set contents</span></label>
     <input id="details" type="text" maxlength="140" placeholder="cotton, 3/4 sleeves, with dupatta" value="${esc(f.details)}">
-    <details class="set"><summary>My affiliate IDs and disclosure line</summary>
+    <details class="set" id="mysetup"><summary>My setup: affiliate IDs and disclosure line</summary>
       <div class="grid2"><div><label for="atag">My Amazon tag</label><input id="atag" type="text" maxlength="40" placeholder="yourname-21" value="${esc(DB.prefs.amazon)}"></div>
       <div><label for="fid">My Flipkart affiliate ID</label><input id="fid" type="text" maxlength="40" placeholder="yourid" value="${esc(DB.prefs.flipkart)}"></div></div>
+      <label for="atm">When I paste a plain product link</label><select id="atm"><option value="auto" ${DB.prefs.autoTag === 'auto' ? 'selected' : ''}>Add my ID to it automatically</option><option value="own" ${DB.prefs.autoTag === 'own' ? 'selected' : ''}>I paste my own official affiliate link</option></select>
       <label class="chk"><input type="checkbox" id="disc" ${DB.prefs.disclosure === 'on' ? 'checked' : ''}> Add an affiliate disclosure line to every description</label>
       <label for="dtext">Disclosure wording</label><select id="dtext"><option value="general" ${DB.prefs.discText === 'general' ? 'selected' : ''}>${esc(PP.DISCLOSURES.general)}</option><option value="amazon" ${DB.prefs.discText === 'amazon' ? 'selected' : ''}>Amazon links: ${esc(PP.DISCLOSURES.amazon)}</option></select>
       <p class="small mute">Pinterest and affiliate programmes expect you to say when a link earns you money. Check your programme's current rules; PinProfit only suggests wording.</p></details>
@@ -75,8 +88,12 @@ function bindCreate() {
   $('#cat').addEventListener('change', () => { S.form.touched.category = true; readForm(); });
   $('#colour').addEventListener('input', () => { S.form.touched.colour = true; readForm(); });
   ['price', 'details'].forEach(id => $('#' + id).addEventListener('input', readForm));
-  $('#atag').addEventListener('input', e => { DB.prefs.amazon = e.target.value; save(); info(); });
+  $('#atag').addEventListener('input', e => { DB.prefs.amazon = e.target.value; save(); info(); const s = $('#setup'); if (s && e.target.value.trim()) s.remove(); });
   $('#fid').addEventListener('input', e => { DB.prefs.flipkart = e.target.value; save(); info(); });
+  $('#atm').addEventListener('change', e => { DB.prefs.autoTag = e.target.value; save(); info(); });
+  const su = $('#setup'); if (su) su.addEventListener('click', e => { const b = e.target.closest('[data-setup]'); if (!b) return; const v = b.dataset.setup;
+    if (v === 'yes') { $('#mysetup').open = true; DB.prefs.setup = ''; save(); su.innerHTML = '<p>Type your Store ID under <b>My setup</b> below. You only do this once.</p>'; $('#atag').focus(); }
+    else { DB.prefs.setup = v === 'no' ? 'no' : 'done'; save(); renderCreate(); } });
   $('#disc').addEventListener('change', e => { DB.prefs.disclosure = e.target.checked ? 'on' : 'off'; save(); });
   $('#dtext').addEventListener('change', e => { DB.prefs.discText = e.target.value; save(); });
   $('#gf').addEventListener('submit', e => { e.preventDefault(); readForm(); if (!S.form.title.trim()) { $('#titleErr').textContent = S.link && S.link.short ? 'This is a short link, so please type the product name.' : 'Type the product name so the pins can be written.'; $('#title').focus(); return; } $('#titleErr').textContent = ''; S.counter = 0; generate(); $('#results').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}); });
@@ -84,7 +101,7 @@ function bindCreate() {
 function generate() {
   const f = S.form;
   S.results = PP.generate({title: f.title, category: f.category, colour: f.colour, details: f.details, price: f.price, disclosure: disclosureText(), counter: S.counter});
-  S.snapshot = {url: S.link && S.link.ok ? S.link.url : f.url.trim(), store: S.link ? S.link.store : 'other', price: f.price};
+  S.snapshot = {url: S.link && S.link.ok ? finalLink(S.link).url : f.url.trim(), store: S.link ? S.link.store : 'other', price: f.price};
   renderResults();
 }
 const meter = (n, soft, hard) => `<span class="cnt ${n > hard ? 'bad' : n > soft ? 'warn' : ''}">${n}/${soft}</span>`;
