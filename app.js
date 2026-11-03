@@ -15,8 +15,15 @@ async function copyText(text) {
   const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(ta); ta.select();
   let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; } ta.remove(); return ok;
 }
+function burst(btn) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r = btn.getBoundingClientRect(), cols = ['#d6336c', '#ff6b9a', '#f2a93b', '#ffc266', '#7c5cff'];
+  for (let i = 0; i < 16; i++) { const s = document.createElement('span'); s.className = 'cf'; const ang = Math.random() * Math.PI * 2, d = 40 + Math.random() * 60;
+    s.style.cssText = `left:${r.left + r.width / 2}px;top:${r.top + r.height / 2}px;background:${cols[i % 5]}`; s.style.setProperty('--dx', Math.cos(ang) * d + 'px'); s.style.setProperty('--dy', Math.sin(ang) * d - 20 + 'px'); s.style.setProperty('--r', Math.round(Math.random() * 540) + 'deg');
+    document.body.appendChild(s); setTimeout(() => s.remove(), 900); }
+}
 async function doCopy(btn, text, label) {
-  const ok = await copyText(text); const old = btn.dataset.l || btn.textContent; btn.dataset.l = old;
+  const ok = await copyText(text); if (ok) burst(btn); const old = btn.dataset.l || btn.textContent; btn.dataset.l = old;
   btn.textContent = ok ? 'Copied ✓' : 'Press Ctrl+C'; btn.classList.toggle('done', ok); toast(ok ? `${label || 'Text'} copied` : 'Copy was blocked by the browser. Select the text and press Ctrl+C.');
   setTimeout(() => { btn.textContent = old; btn.classList.remove('done'); }, 1600);
 }
@@ -295,17 +302,20 @@ function renderPlan() {
 }
 
 /* ---------- home view ---------- */
+const hw = (t, s, c) => t.split(' ').map((w, i) => `<span class="w ${c || ''}" style="--i:${s + i}" aria-hidden="true">${esc(w)}</span>`).join(' ');
 function renderHome() {
   const feat = [['🔗', 'Paste a link', 'Amazon or Flipkart. PinProfit reads the product name from the link text.'], ['✍️', '5 pin versions', 'Festive, college, minimal, budget and party styles, each with its own title and description.'], ['📋', 'One-click copy', 'Copy the title, description, alt text or everything at once.'], ['🖼️', 'Pin image maker', 'Use your own photo, pick a layout and download a 1000×1500 PNG.'], ['🏷️', 'Affiliate ID added for you', 'Save your ID once and it is added to plain product links.'], ['📈', 'Earnings tracker', 'Log clicks and earnings and see which style works best for you.']];
   const faq = [['Is it free?', 'Yes. It runs in your browser and there is nothing to pay.'], ['Does it use AI or read Amazon pages?', 'No. It builds the text from the product name in the link and what you type, so it never invents prices or product details.'], ['Where is my data stored?', 'Only in your browser on this device. Nothing you type or upload is sent to a server.'], ['Will I earn money?', 'PinProfit saves you time writing pins. It cannot promise clicks or sales, and you still need your own affiliate account.']];
-  $('#app').innerHTML = `<section class="hero home"><div class="hcopy"><span class="chip alt">Free · no sign-up · runs in your browser</span><h1>Turn a product link into pins that are ready to post.</h1><p class="lead">Paste an Amazon or Flipkart link. Get five Pinterest pin versions, a pin image and a tracker, all in one place.</p><p class="row"><a class="btn pri big" href="#/create">Create my pins</a><a class="btn big" href="#how">See how it works</a></p></div>
-    <div class="hvis" aria-hidden="true"><img class="logo float" src="logo.png" width="200" height="200" alt=""><div class="mock mk1"><b>Pink Cotton Kurti: Everyday Ethnic Outfit Inspiration</b><span>61/100</span></div><div class="mock mk2">Copied ✓</div></div></section>
+  $('#app').innerHTML = `<section class="hero home"><div class="blobs" aria-hidden="true"><i></i><i></i><i></i></div><div class="hcopy"><span class="chip alt">Free · no sign-up · runs in your browser</span><h1 aria-label="Turn a product link into pins that are ready to post.">${hw('Turn a product link into', 0)} ${hw('pins that are', 5, 'grad')} ${hw('ready to post.', 8, 'grad')}</h1><p class="lead">Paste an Amazon or Flipkart link. Get five Pinterest pin versions, a pin image and a tracker, all in one place.</p><p class="row"><a class="btn pri big" href="#/create">Create my pins</a><a class="btn big" href="#how">See how it works</a></p></div>
+    <div class="hvis" aria-hidden="true"><img class="logo float" src="logo.png" width="200" height="200" alt=""><div class="mock mk1"><b>Pink Cotton Kurti: Everyday Ethnic Outfit Inspiration</b><span>61/100</span></div><div class="mock mk2">Copied ✓</div><div class="mock mk3"><span class="tile"></span><b>Festive</b></div></div></section>
+  <div class="marq" aria-hidden="true"><div class="track">${[0, 1].map(() => '<span>✨ Festive</span><span>🎓 College</span><span>🤍 Minimal</span><span>💸 Budget</span><span>🎉 Party</span><span>📌 Pin-ready</span>').join('')}</div></div>
   <section id="how" class="band rv"><h2>How it works</h2><ol class="steps3"><li><span class="step">1</span><b>Paste</b><span>your product link</span></li><li><span class="step">2</span><b>Copy</b><span>the pin you like best</span></li><li><span class="step">3</span><b>Post</b><span>on Pinterest and track it</span></li></ol></section>
   <section class="rv"><h2>Everything you need to post faster</h2><div class="fgrid">${feat.map((f, i) => `<article class="card feat rv" style="--d:${i * 70}ms"><span class="ico" aria-hidden="true">${f[0]}</span><h3>${esc(f[1])}</h3><p>${esc(f[2])}</p></article>`).join('')}</div></section>
   <section class="rv card honest"><h2>Honest by design</h2><ul><li>No fake AI and no scraping of shop pages.</li><li>A price appears only if you type it.</li><li>The link check says an ID is <b>present</b>, never "verified".</li><li>An affiliate disclosure line is added, as programmes expect.</li></ul></section>
   <section class="rv"><h2>Questions</h2>${faq.map(q => `<details class="faq"><summary>${esc(q[0])}</summary><p>${esc(q[1])}</p></details>`).join('')}</section>
   <section class="rv cta card"><h2>Ready to make your first pin?</h2><a class="btn pri big" href="#/create">Create my pins</a></section>`;
   revealInit();
+  const hv = $('.hvis'); if (hv && !matchMedia('(prefers-reduced-motion: reduce)').matches) { hv.addEventListener('pointermove', e => { const r = hv.getBoundingClientRect(); hv.style.setProperty('--mx', ((e.clientX - r.left) / r.width - .5).toFixed(2)); hv.style.setProperty('--my', ((e.clientY - r.top) / r.height - .5).toFixed(2)); }); hv.addEventListener('pointerleave', () => { hv.style.setProperty('--mx', 0); hv.style.setProperty('--my', 0); }); }
 }
 function revealInit() {
   const els = $$('.rv'); const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
