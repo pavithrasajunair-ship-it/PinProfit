@@ -97,6 +97,16 @@ try:
     bk.fill('#bt','\n'.join('https://www.amazon.in/Dress-%d/dp/B09CCC%04d'%(i,i) for i in range(30))); bk.click('#bf button[type=submit]'); bk.wait_for_timeout(500)
     chk('bulk max 20',bk.locator('[data-r]').count()==20)
     bk.fill('#bt','https://www.amazon.in/<img src=x onerror=alert(1)>/dp/B09DDD0001'); bk.click('#bf button[type=submit]'); bk.wait_for_timeout(300); chk('bulk escaped',bk.locator('#bout img').count()==0)
+    # plan
+    pl=ctx.new_page(); pl.goto(U+'#/bulk'); pl.evaluate("localStorage.setItem('pinprofit.v1',JSON.stringify({prefs:{setup:'done'},pins:[]}))"); pl.reload(); pl.wait_for_timeout(250)
+    pl.fill('#bt','\n'.join('https://www.amazon.in/Women-Pink-Kurti-%d/dp/B09AAA%04d'%(i,i) for i in range(5))); pl.click('#bf button[type=submit]'); pl.wait_for_timeout(300); pl.click('#bsaveall'); pl.wait_for_timeout(200)
+    pl.goto(U+'#/plan'); pl.wait_for_timeout(300)
+    chk('plan 3 days for 5 pins at 2/day',pl.locator('[data-day]').count()==3 and 'Today' in pl.inner_text('#app'))
+    pl.locator('[data-pc=desc]').first.click(); chk('plan copy desc',len(pl.evaluate('navigator.clipboard.readText()'))>50)
+    pl.locator('[data-dcopy="0"]').click(); chk('copy day','----------' in pl.evaluate('navigator.clipboard.readText()'))
+    pl.select_option('#perday','5'); pl.wait_for_timeout(200); chk('5/day one day',pl.locator('[data-day]').count()==1)
+    pl.locator('[data-posted]').first.click(); pl.wait_for_timeout(200); chk('mark posted',pl.locator('[data-posted]').count()==4)
+    chk('posted persists',pl.evaluate("JSON.parse(localStorage.getItem('pinprofit.v1')).pins.filter(p=>p.status==='published').length")==1)
     # pwa
     mf=ctx.new_page(); r=mf.goto('http://localhost:8782/manifest.webmanifest'); mj=r.json(); chk('manifest',mj['display']=='standalone' and len(mj['icons'])==2)
     for ic in mj['icons']: chk('icon '+ic['src'],mf.goto('http://localhost:8782/'+ic['src']).status==200)
@@ -106,7 +116,7 @@ try:
     # mobile
     m=ctx.new_page(); m.set_viewport_size({'width':375,'height':800}); m.goto(U)
     m.wait_for_timeout(200); chk('home no hscroll',m.evaluate('document.documentElement.scrollWidth<=window.innerWidth'))
-    for h in ['#/','#/create','#/bulk','#/image','#/saved']:
+    for h in ['#/','#/create','#/bulk','#/plan','#/image','#/saved']:
         m.goto(U+h); m.wait_for_timeout(250)
         chk('no hscroll '+h,m.evaluate('document.documentElement.scrollWidth<=window.innerWidth'))
     m.screenshot(path='/tmp/pp_mobile.png')

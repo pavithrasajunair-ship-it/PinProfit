@@ -3,7 +3,7 @@ document.documentElement.classList.add('js');
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const KEY = 'pinprofit.v1';
-let DB = {prefs: {amazon: '', flipkart: '', disclosure: 'on', discText: 'general', autoTag: 'auto', setup: ''}, pins: []};
+let DB = {prefs: {amazon: '', flipkart: '', disclosure: 'on', discText: 'general', autoTag: 'auto', setup: '', perDay: 2}, pins: []};
 function load() { try { const r = JSON.parse(localStorage.getItem(KEY) || 'null'); if (r && Array.isArray(r.pins)) DB = {prefs: Object.assign(DB.prefs, r.prefs || {}), pins: r.pins}; } catch (e) { /* storage unavailable: run in memory */ } }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { /* ignore */ } updateBadge(); }
 function updateBadge() { const b = $('#savedCount'); if (b) { b.textContent = DB.pins.length; b.hidden = !DB.pins.length; } }
@@ -127,7 +127,7 @@ document.addEventListener('click', e => {
   const card = b.closest('.pin'); if (!card) return; const v = S.results[+card.dataset.i];
   if (b.dataset.copy) { const map = {title: v.title, description: v.description, alt: v.alt, all: v.text + (S.snapshot.url ? '\n\nLINK\n' + S.snapshot.url : '')}; return doCopy(b, map[b.dataset.copy], b.dataset.copy === 'all' ? 'Everything' : b.dataset.copy[0].toUpperCase() + b.dataset.copy.slice(1)); }
   if (b.dataset.act === 'image') { const bk = PP.priceBucket(S.snapshot.price); Object.assign(S.studio, {headline: v.title, small: bk ? `Under ₹${bk.toLocaleString('en-IN')}` : '', cta: 'Shop the look'}); location.hash = '#/image'; }
-  if (b.dataset.act === 'save') { DB.pins.unshift({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Date.now(), title: v.title, store: S.snapshot.store, url: S.snapshot.url, angle: v.angle, label: v.label, board: v.board, status: 'drafted', clicks: '', earn: '', note: ''}); save(); toast('Saved to My pins'); b.textContent = 'Saved ✓'; b.disabled = true; }
+  if (b.dataset.act === 'save') { DB.pins.unshift({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Date.now(), title: v.title, store: S.snapshot.store, url: S.snapshot.url, angle: v.angle, label: v.label, board: v.board, desc: v.description, alt: v.alt, status: 'drafted', clicks: '', earn: '', note: ''}); save(); toast('Saved to My pins'); b.textContent = 'Saved ✓'; b.disabled = true; }
 });
 
 /* ---------- pin image view ---------- */
@@ -184,8 +184,8 @@ const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
 function cleanDB(raw) {
   if (!raw || typeof raw !== 'object' || raw.app !== 'pinprofit' || !Array.isArray(raw.pins) || raw.pins.length > 5000) return null;
   const pr = raw.prefs && typeof raw.prefs === 'object' ? raw.prefs : {};
-  const prefs = {amazon: clip(pr.amazon, 40), flipkart: clip(pr.flipkart, 40), disclosure: pr.disclosure === 'off' ? 'off' : 'on', discText: pr.discText === 'amazon' ? 'amazon' : 'general', autoTag: pr.autoTag === 'own' ? 'own' : 'auto', setup: ['no', 'done'].includes(pr.setup) ? pr.setup : ''};
-  const pins = raw.pins.filter(p => p && typeof p === 'object').map(p => ({id: clip(p.id, 20).replace(/[^\w-]/g, '') || Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Number.isFinite(+p.t) && +p.t > 0 ? +p.t : Date.now(), title: clip(p.title, 200), store: ['amazon', 'flipkart', 'meesho', 'myntra', 'other'].includes(p.store) ? p.store : 'other', url: /^https?:\/\//i.test(p.url) ? clip(p.url, 2000) : '', angle: clip(p.angle, 20), label: clip(p.label, 60), board: clip(p.board, 80), status: ['drafted', 'published', 'update'].includes(p.status) ? p.status : 'drafted', clicks: clip(p.clicks, 7), earn: clip(p.earn, 9), note: clip(p.note, 120)}));
+  const prefs = {amazon: clip(pr.amazon, 40), flipkart: clip(pr.flipkart, 40), disclosure: pr.disclosure === 'off' ? 'off' : 'on', discText: pr.discText === 'amazon' ? 'amazon' : 'general', autoTag: pr.autoTag === 'own' ? 'own' : 'auto', setup: ['no', 'done'].includes(pr.setup) ? pr.setup : '', perDay: [1, 2, 3, 4, 5].includes(+pr.perDay) ? +pr.perDay : 2};
+  const pins = raw.pins.filter(p => p && typeof p === 'object').map(p => ({id: clip(p.id, 20).replace(/[^\w-]/g, '') || Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Number.isFinite(+p.t) && +p.t > 0 ? +p.t : Date.now(), title: clip(p.title, 200), store: ['amazon', 'flipkart', 'meesho', 'myntra', 'other'].includes(p.store) ? p.store : 'other', url: /^https?:\/\//i.test(p.url) ? clip(p.url, 2000) : '', angle: clip(p.angle, 20), label: clip(p.label, 60), board: clip(p.board, 80), desc: clip(p.desc, 800), alt: clip(p.alt, 500), status: ['drafted', 'published', 'update'].includes(p.status) ? p.status : 'drafted', clicks: clip(p.clicks, 7), earn: clip(p.earn, 9), note: clip(p.note, 120)}));
   return {prefs, pins};
 }
 function backupCard() {
@@ -264,7 +264,7 @@ function renderBulk() {
   const bo = $('#bout');
   bo.addEventListener('input', e => { const el = e.target.closest('[data-bname]'); if (!el) return; const i = +el.closest('[data-r]').dataset.r, r = S.bulk.rows[i]; r.title = el.value; r.cat = PP.detectCategory(r.title); r.colour = PP.detectColour(r.title); r.saved = false; $('#bp' + i).innerHTML = bulkPinHtml(r, i, bulkPin(r)); });
   bo.addEventListener('change', e => { const el = e.target.closest('[data-bstyle]'); if (!el) return; const i = +el.closest('[data-r]').dataset.r, r = S.bulk.rows[i]; r.style = +el.value; r.saved = false; $('#bp' + i).innerHTML = bulkPinHtml(r, i, bulkPin(r)); });
-  const savePin = (r, v) => { DB.pins.unshift({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Date.now(), title: v.title, store: r.link.store, url: r.fl.url, angle: v.angle, label: v.label, board: v.board, status: 'drafted', clicks: '', earn: '', note: ''}); r.saved = true; };
+  const savePin = (r, v) => { DB.pins.unshift({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Date.now(), title: v.title, store: r.link.store, url: r.fl.url, angle: v.angle, label: v.label, board: v.board, desc: v.description, alt: v.alt, status: 'drafted', clicks: '', earn: '', note: ''}); r.saved = true; };
   bo.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
     if (b.id === 'bcopyall') { const t = S.bulk.rows.filter(r => r.ok && r.title.trim()).map(r => bulkText(r, bulkPin(r))).join('\n\n----------\n\n'); return doCopy(b, t, 'All pins'); }
     if (b.id === 'bsaveall') { let n = 0; S.bulk.rows.forEach(r => { const v = r.ok && !r.saved ? bulkPin(r) : null; if (v) { savePin(r, v); n++; } }); save(); updateBadge(); toast(n ? `Saved ${n} pin${n > 1 ? 's' : ''}` : 'Nothing new to save'); return out(); }
@@ -273,6 +273,25 @@ function renderBulk() {
     const map = {title: v.title, desc: v.description, link: r.fl.url, all: bulkText(r, v)};
     doCopy(b, map[b.dataset.bc], b.dataset.bc === 'all' ? 'Everything' : b.dataset.bc === 'link' ? 'Link' : b.dataset.bc === 'title' ? 'Title' : 'Description'); });
   out();
+}
+
+/* ---------- posting plan ---------- */
+function renderPlan() {
+  const per = DB.prefs.perDay || 2, drafts = DB.pins.filter(p => p.status === 'drafted').slice().reverse();
+  const days = []; drafts.forEach((p, i) => { const d = Math.floor(i / per); (days[d] = days[d] || []).push(p); });
+  const SHOW = 14, fmt = i => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + i); return d.toLocaleDateString('en-IN', {weekday: 'long', day: 'numeric', month: 'short'}); };
+  const dayText = ps => ps.map(p => [p.title, p.desc, p.url ? 'LINK\n' + p.url : ''].filter(Boolean).join('\n\n')).join('\n\n----------\n\n');
+  $('#app').innerHTML = `<section class="hero"><h1>Posting plan</h1><p class="mute">Steady posting works better than posting 20 pins in one day. PinProfit spreads your saved, not-yet-posted pins across the coming days, oldest first.</p></section>
+  <div class="card row sp"><label for="perday" style="margin:0">Pins per day</label><select id="perday" style="width:auto">${[1, 2, 3, 4, 5].map(n => `<option ${n === per ? 'selected' : ''}>${n}</option>`).join('')}</select><span class="small mute">${drafts.length} pin${drafts.length === 1 ? '' : 's'} waiting · about ${Math.ceil(drafts.length / per)} day${Math.ceil(drafts.length / per) === 1 ? '' : 's'}</span></div>
+  ${drafts.length ? days.slice(0, SHOW).map((ps, i) => `<section class="card" data-day="${i}"><div class="row sp"><h2 style="margin:0">${esc(i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : fmt(i))}</h2><button class="btn sm" data-dcopy="${i}" type="button">Copy this day</button></div>
+    ${ps.map(p => `<div class="sp-row" data-id="${esc(p.id)}"><div><b>${esc(p.title)}</b><p class="small mute">${esc(p.label)} · Board: ${esc(p.board)}</p></div><div class="row"><button class="btn sm" data-pc="title" type="button">Copy title</button>${p.desc ? '<button class="btn sm" data-pc="desc" type="button">Copy description</button>' : ''}${p.url ? '<button class="btn sm" data-pc="link" type="button">Copy link</button>' : ''}<button class="btn sm pri" data-posted="1" type="button">Mark as posted</button></div></div>`).join('')}</section>`).join('') + (days.length > SHOW ? `<p class="small mute">…and ${drafts.length - SHOW * per} more pins after these ${SHOW} days.</p>` : '')
+  : `<div class="empty"><p><b>Nothing waiting to post.</b></p><p>Save pins from Create pins or Many links, and they will show up here.</p><a class="btn pri" href="#/create">Create pins</a></div>`}`;
+  $('#perday').addEventListener('change', e => { DB.prefs.perDay = +e.target.value; save(); renderPlan(); });
+  $('#app').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.dcopy !== undefined) return doCopy(b, dayText(days[+b.dataset.dcopy]), 'Day plan');
+    const row = b.closest('[data-id]'); const p = row && DB.pins.find(x => x.id === row.dataset.id); if (!p) return;
+    if (b.dataset.posted) { p.status = 'published'; save(); toast('Marked as posted'); return renderPlan(); }
+    const map = {title: p.title, desc: p.desc, link: p.url}; doCopy(b, map[b.dataset.pc], b.dataset.pc === 'desc' ? 'Description' : b.dataset.pc === 'link' ? 'Link' : 'Title'); });
 }
 
 /* ---------- home view ---------- */
@@ -300,11 +319,11 @@ function revealInit() {
 
 /* ---------- router ---------- */
 function route() {
-  const r = (location.hash.match(/^#\/(\w+)/) || [])[1]; const name = ['home', 'create', 'bulk', 'image', 'saved'].includes(r) ? r : 'home';
+  const r = (location.hash.match(/^#\/(\w+)/) || [])[1]; const name = ['home', 'create', 'bulk', 'plan', 'image', 'saved'].includes(r) ? r : 'home';
   $$('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.t === name ? 'page' : 'false'));
   const app = $('#app'); const fresh = app.cloneNode(false); app.replaceWith(fresh);   // drops old listeners
-  ({home: renderHome, create: renderCreate, bulk: renderBulk, image: renderImage, saved: renderSaved})[name](); window.scrollTo(0, 0);
-  document.title = name === 'home' ? 'PinProfit – Turn a product link into ready-to-post Pinterest pins' : ({create: 'Create pins', bulk: 'Many links', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
+  ({home: renderHome, create: renderCreate, bulk: renderBulk, plan: renderPlan, image: renderImage, saved: renderSaved})[name](); window.scrollTo(0, 0);
+  document.title = name === 'home' ? 'PinProfit – Turn a product link into ready-to-post Pinterest pins' : ({create: 'Create pins', bulk: 'Many links', plan: 'Posting plan', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
 }
 load(); updateBadge(); window.addEventListener('hashchange', route); route();
 
