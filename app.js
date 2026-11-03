@@ -1,0 +1,172 @@
+'use strict';
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const KEY = 'pinprofit.v1';
+let DB = {prefs: {amazon: '', flipkart: '', disclosure: 'on', discText: 'general'}, pins: []};
+function load() { try { const r = JSON.parse(localStorage.getItem(KEY) || 'null'); if (r && Array.isArray(r.pins)) DB = {prefs: Object.assign(DB.prefs, r.prefs || {}), pins: r.pins}; } catch (e) { /* storage unavailable: run in memory */ } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { /* ignore */ } updateBadge(); }
+function updateBadge() { const b = $('#savedCount'); if (b) { b.textContent = DB.pins.length; b.hidden = !DB.pins.length; } }
+
+/* ---------- toast + copy ---------- */
+let toastT; function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800); }
+async function copyText(text) {
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* fall back */ }
+  const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; } ta.remove(); return ok;
+}
+async function doCopy(btn, text, label) {
+  const ok = await copyText(text); const old = btn.dataset.l || btn.textContent; btn.dataset.l = old;
+  btn.textContent = ok ? 'Copied ✓' : 'Press Ctrl+C'; btn.classList.toggle('done', ok); toast(ok ? `${label || 'Text'} copied` : 'Copy was blocked by the browser. Select the text and press Ctrl+C.');
+  setTimeout(() => { btn.textContent = old; btn.classList.remove('done'); }, 1600);
+}
+
+/* ---------- state ---------- */
+const S = {form: {url: '', title: '', category: 'other', colour: '', price: '', details: '', touched: {}}, link: null, results: null, counter: 0, studio: {img: null, imgName: '', template: 'band', theme: 'rose', headline: '', small: '', cta: 'Shop the look'}};
+const disclosureText = () => { if (DB.prefs.disclosure !== 'on') return ''; const amz = S.link && S.link.store === 'amazon'; return DB.prefs.discText === 'amazon' && amz ? PP.DISCLOSURES.amazon : DB.prefs.discText === 'amazon' ? PP.DISCLOSURES.general : PP.DISCLOSURES.general; };
+
+/* ---------- create view ---------- */
+const STORE_NAME = {amazon: 'Amazon', flipkart: 'Flipkart', meesho: 'Meesho', myntra: 'Myntra', other: 'Other shop'};
+function linkNotes() {
+  const l = S.link; if (!l) return '';
+  const items = l.issues.concat(PP.checkAffiliate(l, {amazon: DB.prefs.amazon.trim(), flipkart: DB.prefs.flipkart.trim()}));
+  const head = l.ok ? `<span class="chip">${esc(STORE_NAME[l.store])}</span>` : '';
+  return head + items.map(i => `<p class="note ${i.level}" role="${i.level === 'error' ? 'alert' : 'status'}">${i.level === 'ok' ? '✓' : i.level === 'warn' ? '⚠' : i.level === 'error' ? '✕' : 'ℹ'} ${esc(i.msg)}</p>`).join('');
+}
+function renderCreate() {
+  const f = S.form;
+  $('#app').innerHTML = `<section class="hero"><h1>Paste a product link. Get pins ready to post.</h1><p class="mute">Five different pin versions with titles, descriptions, hashtags and alt text. One click copies each part.</p></section>
+  <form id="gf" class="card" novalidate>
+    <h2><span class="step">1</span> The product</h2>
+    <label for="url">Product link (Amazon or Flipkart) <span class="mute">optional but recommended</span></label>
+    <input id="url" type="text" inputmode="url" autocomplete="off" placeholder="https://www.amazon.in/..." value="${esc(f.url)}">
+    <div id="linkInfo" aria-live="polite">${linkNotes()}</div>
+    <div class="grid2">
+      <div><label for="title">Product name</label><input id="title" type="text" maxlength="160" placeholder="e.g. Women Pink Cotton Printed Kurti" value="${esc(f.title)}"><div class="err" id="titleErr" role="alert"></div></div>
+      <div><label for="cat">Type</label><select id="cat">${PP.CATS.map(c => `<option value="${c.id}" ${c.id === f.category ? 'selected' : ''}>${esc(c.id === 'other' ? 'Other / not sure' : c.noun[0].toUpperCase() + c.noun.slice(1))}</option>`).join('')}</select></div>
+      <div><label for="colour">Colour</label><input id="colour" type="text" maxlength="30" placeholder="e.g. pink" value="${esc(f.colour)}"></div>
+      <div><label for="price">Price in ₹ <span class="mute">optional</span></label><input id="price" type="text" inputmode="numeric" maxlength="7" placeholder="e.g. 649" value="${esc(f.price)}"></div>
+    </div>
+    <label for="details">Details you know are true <span class="mute">optional: fabric, sleeves, set contents</span></label>
+    <input id="details" type="text" maxlength="140" placeholder="cotton, 3/4 sleeves, with dupatta" value="${esc(f.details)}">
+    <details class="set"><summary>My affiliate IDs and disclosure line</summary>
+      <div class="grid2"><div><label for="atag">My Amazon tag</label><input id="atag" type="text" maxlength="40" placeholder="yourname-21" value="${esc(DB.prefs.amazon)}"></div>
+      <div><label for="fid">My Flipkart affiliate ID</label><input id="fid" type="text" maxlength="40" placeholder="yourid" value="${esc(DB.prefs.flipkart)}"></div></div>
+      <label class="chk"><input type="checkbox" id="disc" ${DB.prefs.disclosure === 'on' ? 'checked' : ''}> Add an affiliate disclosure line to every description</label>
+      <label for="dtext">Disclosure wording</label><select id="dtext"><option value="general" ${DB.prefs.discText === 'general' ? 'selected' : ''}>${esc(PP.DISCLOSURES.general)}</option><option value="amazon" ${DB.prefs.discText === 'amazon' ? 'selected' : ''}>Amazon links: ${esc(PP.DISCLOSURES.amazon)}</option></select>
+      <p class="small mute">Pinterest and affiliate programmes expect you to say when a link earns you money. Check your programme's current rules; PinProfit only suggests wording.</p></details>
+    <p><button class="btn pri" type="submit">Generate 5 pins</button></p>
+  </form>
+  <div id="results" aria-live="polite"></div>`;
+  bindCreate(); if (S.results) renderResults();
+}
+function readForm() { const f = S.form; f.url = $('#url').value; f.title = $('#title').value; f.category = $('#cat').value; f.colour = $('#colour').value; f.price = $('#price').value; f.details = $('#details').value; }
+function bindCreate() {
+  const info = () => { $('#linkInfo').innerHTML = linkNotes(); };
+  const apply = () => {
+    S.link = PP.parseLink($('#url').value); info();
+    if (S.link.slugTitle && !S.form.touched.title) { $('#title').value = S.link.slugTitle; }
+    const t = $('#title').value;
+    if (t && !S.form.touched.category) $('#cat').value = PP.detectCategory(t);
+    if (t && !S.form.touched.colour) $('#colour').value = PP.detectColour(t);
+    readForm();
+  };
+  $('#url').addEventListener('input', apply); $('#url').addEventListener('paste', () => setTimeout(apply, 0));
+  $('#title').addEventListener('input', () => { S.form.touched.title = true; const t = $('#title').value; if (!S.form.touched.category) $('#cat').value = PP.detectCategory(t); if (!S.form.touched.colour) $('#colour').value = PP.detectColour(t); readForm(); });
+  $('#cat').addEventListener('change', () => { S.form.touched.category = true; readForm(); });
+  $('#colour').addEventListener('input', () => { S.form.touched.colour = true; readForm(); });
+  ['price', 'details'].forEach(id => $('#' + id).addEventListener('input', readForm));
+  $('#atag').addEventListener('input', e => { DB.prefs.amazon = e.target.value; save(); info(); });
+  $('#fid').addEventListener('input', e => { DB.prefs.flipkart = e.target.value; save(); info(); });
+  $('#disc').addEventListener('change', e => { DB.prefs.disclosure = e.target.checked ? 'on' : 'off'; save(); });
+  $('#dtext').addEventListener('change', e => { DB.prefs.discText = e.target.value; save(); });
+  $('#gf').addEventListener('submit', e => { e.preventDefault(); readForm(); if (!S.form.title.trim()) { $('#titleErr').textContent = S.link && S.link.short ? 'This is a short link, so please type the product name.' : 'Type the product name so the pins can be written.'; $('#title').focus(); return; } $('#titleErr').textContent = ''; S.counter = 0; generate(); $('#results').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}); });
+}
+function generate() {
+  const f = S.form;
+  S.results = PP.generate({title: f.title, category: f.category, colour: f.colour, details: f.details, price: f.price, disclosure: disclosureText(), counter: S.counter});
+  S.snapshot = {url: S.link && S.link.ok ? S.link.url : f.url.trim(), store: S.link ? S.link.store : 'other', price: f.price};
+  renderResults();
+}
+const meter = (n, soft, hard) => `<span class="cnt ${n > hard ? 'bad' : n > soft ? 'warn' : ''}">${n}/${soft}</span>`;
+function renderResults() {
+  const r = S.results; if (!r) return;
+  const link = S.snapshot.url;
+  $('#results').innerHTML = `<div class="row sp rh"><h2><span class="step">2</span> Your 5 pins</h2><button class="btn" id="regen">↻ Write them differently</button></div>
+  ${link ? `<div class="card linkcard row sp"><span class="small"><b>Destination link</b> <span class="mono">${esc(link.length > 70 ? link.slice(0, 70) + '…' : link)}</span></span><button class="btn sm" data-copy="link">Copy link</button></div>` : '<p class="note info">ℹ No product link added, so there is no link to copy. Add your affiliate link to the pin on Pinterest.</p>'}
+  <div class="pins">${r.map((v, i) => `<article class="card pin" data-i="${i}"><div class="row sp"><span class="chip alt">${esc(v.label)}</span><span class="small mute">Board: ${esc(v.board)}</span></div>
+    <h3>Title ${meter(v.title.length, 100, 100)}</h3><p class="val" data-f="title">${esc(v.title)}</p>
+    <h3>Description ${meter(v.description.length, 500, 800)}</h3><p class="val desc" data-f="description">${esc(v.description)}</p>
+    <h3>Alt text</h3><p class="val small" data-f="alt">${esc(v.alt)}</p>
+    <h3>Search keywords</h3><p class="val small">${esc(v.keywords.join(', '))}</p>
+    <div class="actions"><button class="btn sm" data-copy="title">Copy title</button><button class="btn sm" data-copy="description">Copy description</button><button class="btn sm" data-copy="alt">Copy alt text</button><button class="btn sm pri" data-copy="all">Copy everything</button></div>
+    <div class="actions"><button class="btn sm" data-act="image">Make the pin image →</button><button class="btn sm" data-act="save">Save to my pins</button></div></article>`).join('')}</div>
+  <p class="small mute">Pinterest shows roughly the first 50 to 60 characters of a title, so the key words come first. Descriptions work best under 500 characters (the limit is 800). Post each version on a different day rather than all at once.</p>`;
+  $('#regen').addEventListener('click', () => { S.counter++; generate(); toast('Written differently'); });
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-copy],[data-act]'); if (!b) return;
+  if (b.dataset.copy === 'link') return doCopy(b, S.snapshot.url, 'Link');
+  const card = b.closest('.pin'); if (!card) return; const v = S.results[+card.dataset.i];
+  if (b.dataset.copy) { const map = {title: v.title, description: v.description, alt: v.alt, all: v.text + (S.snapshot.url ? '\n\nLINK\n' + S.snapshot.url : '')}; return doCopy(b, map[b.dataset.copy], b.dataset.copy === 'all' ? 'Everything' : b.dataset.copy[0].toUpperCase() + b.dataset.copy.slice(1)); }
+  if (b.dataset.act === 'image') { const bk = PP.priceBucket(S.snapshot.price); Object.assign(S.studio, {headline: v.title, small: bk ? `Under ₹${bk.toLocaleString('en-IN')}` : '', cta: 'Shop the look'}); location.hash = '#/image'; }
+  if (b.dataset.act === 'save') { DB.pins.unshift({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Date.now(), title: v.title, store: S.snapshot.store, url: S.snapshot.url, angle: v.angle, label: v.label, board: v.board, status: 'drafted', clicks: '', earn: '', note: ''}); save(); toast('Saved to My pins'); b.textContent = 'Saved ✓'; b.disabled = true; }
+});
+
+/* ---------- pin image view ---------- */
+let raf = 0; const redraw = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const c = $('#cv'); if (c) Studio.draw(c, S.studio); }); };
+function renderImage() {
+  const s = S.studio;
+  $('#app').innerHTML = `<section class="hero"><h1>Make the pin image</h1><p class="mute">Upload your own photo, pick a layout, and download a 1000 × 1500 pin (the 2:3 shape Pinterest likes).</p></section>
+  <div class="studio"><div class="card canvasbox"><canvas id="cv" width="1000" height="1500" role="img" aria-label="Pin preview"></canvas></div>
+  <div class="card ctl">
+    <label for="photo">Your photo</label><input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><div class="err" id="photoErr" role="alert"></div>
+    <p class="small mute">Use photos you took or have permission to use. Product photos copied from shopping sites may not be allowed by the shop or your affiliate programme. The photo stays on your device.</p>
+    <label>Layout</label><div class="seg" id="tpl" role="group" aria-label="Layout">${Object.entries(Studio.TEMPLATES).map(([k, n]) => `<button type="button" class="tab" data-k="${k}" aria-pressed="${k === s.template}">${esc(n)}</button>`).join('')}</div>
+    <label>Colours</label><div class="seg" id="thm" role="group" aria-label="Colours">${Object.entries(Studio.THEMES).map(([k, t]) => `<button type="button" class="sw" data-k="${k}" aria-pressed="${k === s.theme}" aria-label="${esc(t.name)}" title="${esc(t.name)}" style="background:linear-gradient(135deg,${t.bg} 50%,${t.accent} 50%)"></button>`).join('')}</div>
+    <label for="hd">Headline</label><textarea id="hd" rows="3" maxlength="120">${esc(s.headline)}</textarea>
+    <div class="grid2"><div><label for="sm">Badge text</label><input id="sm" type="text" maxlength="24" placeholder="Under ₹699" value="${esc(s.small)}"></div><div><label for="ct">Call to action</label><input id="ct" type="text" maxlength="30" value="${esc(s.cta)}"></div></div>
+    <div class="actions"><button class="btn pri" id="dl">Download pin (PNG)</button><button class="btn" id="cpimg">Copy image</button></div>
+    <p class="small mute" id="imgNote"></p></div></div>`;
+  $('#photo').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { s.img = await Studio.loadImage(f); s.imgName = f.name; $('#photoErr').textContent = ''; redraw(); } catch (err) { $('#photoErr').textContent = err.message; e.target.value = ''; } });
+  $('#tpl').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; s.template = b.dataset.k; $$('#tpl .tab').forEach(x => x.setAttribute('aria-pressed', x === b)); redraw(); });
+  $('#thm').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; s.theme = b.dataset.k; $$('#thm .sw').forEach(x => x.setAttribute('aria-pressed', x === b)); redraw(); });
+  [['hd', 'headline'], ['sm', 'small'], ['ct', 'cta']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { s[k] = e.target.value; redraw(); }));
+  const blob = () => new Promise(res => $('#cv').toBlob(res, 'image/png'));
+  $('#dl').addEventListener('click', async () => { Studio.draw($('#cv'), s); const b = await blob(); if (!b) { $('#imgNote').textContent = 'The image could not be created. Try a smaller photo.'; return; } const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'pinprofit-pin.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Pin downloaded'); });
+  $('#cpimg').addEventListener('click', async () => { try { const b = await blob(); await navigator.clipboard.write([new ClipboardItem({'image/png': b})]); toast('Image copied'); $('#imgNote').textContent = ''; } catch (e) { $('#imgNote').textContent = 'Your browser did not allow copying the image. Use Download instead.'; } });
+  redraw();
+}
+
+/* ---------- saved pins ---------- */
+const csvCell = v => { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+function sumHtml() {
+  const pins = DB.pins, total = pins.reduce((a, p) => a + (parseFloat(p.earn) || 0), 0), clicks = pins.reduce((a, p) => a + (parseInt(p.clicks, 10) || 0), 0);
+  const by = {}; pins.forEach(p => { const e = parseFloat(p.earn) || 0; if (e > 0) { (by[p.label] = by[p.label] || {e: 0, n: 0}); by[p.label].e += e; by[p.label].n++; } });
+  const best = Object.entries(by).sort((a, b) => b[1].e - a[1].e)[0];
+  return `<div class="card"><h3>Pins saved</h3><p class="stat">${pins.length}</p><p class="small mute">${pins.filter(p => p.status === 'published').length} published</p></div><div class="card"><h3>Clicks you logged</h3><p class="stat">${clicks}</p></div><div class="card"><h3>Earnings you logged</h3><p class="stat">₹${total.toLocaleString('en-IN', {maximumFractionDigits: 2})}</p>${best ? `<p class="small mute">Top style so far: <b>${esc(best[0])}</b> (₹${best[1].e.toLocaleString('en-IN')} from ${best[1].n} pin${best[1].n > 1 ? 's' : ''})</p>` : '<p class="small mute">Add earnings to see which style works best.</p>'}</div>`;
+}
+function renderSaved() {
+  const pins = DB.pins;
+  $('#app').innerHTML = `<section class="hero"><h1>My pins</h1><p class="mute">Track what you posted and what it earned. Numbers are the ones you type in; PinProfit does not read your Pinterest or affiliate accounts.</p></section>
+  ${pins.length ? `<div class="grid3" id="sum">${sumHtml()}</div>
+  <div class="row sp" style="margin:1rem 0"><h2>All pins</h2><button class="btn" id="csv">Download as spreadsheet (CSV)</button></div>
+  <div class="plist">${pins.map(p => `<article class="card sp-row" data-id="${esc(p.id)}"><div><b>${esc(p.title)}</b><p class="small mute">${esc(p.label)} · ${esc(STORE_NAME[p.store] || 'Shop')} · Board: ${esc(p.board)} · saved ${new Date(p.t).toLocaleDateString('en-IN')}</p></div>
+    <div class="trk"><label>Status<select data-k="status"><option value="drafted" ${p.status === 'drafted' ? 'selected' : ''}>Drafted</option><option value="published" ${p.status === 'published' ? 'selected' : ''}>Published</option><option value="update" ${p.status === 'update' ? 'selected' : ''}>Needs update</option></select></label>
+    <label>Clicks<input data-k="clicks" type="text" inputmode="numeric" maxlength="7" value="${esc(p.clicks)}"></label><label>Earned ₹<input data-k="earn" type="text" inputmode="decimal" maxlength="9" value="${esc(p.earn)}"></label>
+    <label class="wide">Note<input data-k="note" type="text" maxlength="120" value="${esc(p.note)}"></label><button class="btn sm" data-del="1">Delete</button></div></article>`).join('')}</div>`
+  : `<div class="empty"><p><b>No saved pins yet.</b></p><p>Generate pins and press “Save to my pins” on the ones you post.</p><a class="btn pri" href="#/create">Create pins</a></div>`}`;
+  const csv = $('#csv'); if (csv) csv.addEventListener('click', () => { const rows = [['Saved', 'Title', 'Style', 'Shop', 'Board', 'Status', 'Clicks', 'Earned (INR)', 'Note', 'Link']].concat(DB.pins.map(p => [new Date(p.t).toISOString().slice(0, 10), p.title, p.label, p.store, p.board, p.status, p.clicks, p.earn, p.note, p.url])); const b = new Blob(['﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')], {type: 'text/csv'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'pinprofit-pins.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
+}
+function onTrack(e) { const el = e.target.closest('[data-k]'); const card = el && el.closest('.sp-row'); if (!card) return; const p = DB.pins.find(x => x.id === card.dataset.id); if (!p) return; p[el.dataset.k] = el.value; save(); const sm = $('#sum'); if (sm) sm.innerHTML = sumHtml(); }
+document.addEventListener('input', onTrack); document.addEventListener('change', onTrack);
+document.addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (!d) return; const card = d.closest('.sp-row'); if (!confirm('Delete this saved pin?')) return; DB.pins = DB.pins.filter(x => x.id !== card.dataset.id); save(); renderSaved(); });
+
+/* ---------- router ---------- */
+function route() {
+  const r = (location.hash.match(/^#\/(\w+)/) || [])[1]; const name = ['create', 'image', 'saved'].includes(r) ? r : 'create';
+  $$('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.t === name ? 'page' : 'false'));
+  const app = $('#app'); const fresh = app.cloneNode(false); app.replaceWith(fresh);   // drops old listeners
+  ({create: renderCreate, image: renderImage, saved: renderSaved})[name](); window.scrollTo(0, 0);
+  document.title = ({create: 'Create pins', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
+}
+load(); updateBadge(); window.addEventListener('hashchange', route); route();
