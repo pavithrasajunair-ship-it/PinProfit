@@ -163,19 +163,62 @@ function sumHtml() {
   const best = Object.entries(by).sort((a, b) => b[1].e - a[1].e)[0];
   return `<div class="card"><h3>Pins saved</h3><p class="stat">${pins.length}</p><p class="small mute">${pins.filter(p => p.status === 'published').length} published</p></div><div class="card"><h3>Clicks you logged</h3><p class="stat">${clicks}</p></div><div class="card"><h3>Earnings you logged</h3><p class="stat">₹${total.toLocaleString('en-IN', {maximumFractionDigits: 2})}</p>${best ? `<p class="small mute">Top style so far: <b>${esc(best[0])}</b> (₹${best[1].e.toLocaleString('en-IN')} from ${best[1].n} pin${best[1].n > 1 ? 's' : ''})</p>` : '<p class="small mute">Add earnings to see which style works best.</p>'}</div>`;
 }
+/* ---------- weekly chart ---------- */
+function weekly() {
+  const mon = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+  const now = mon(Date.now()), W = 8, out = [];
+  for (let i = W - 1; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - 7 * i); out.push({t: d.getTime(), e: 0, n: 0}); }
+  DB.pins.forEach(p => { const k = out.find(w => w.t === mon(p.t)); if (k) { k.n++; k.e += Number(p.earn) > 0 ? Number(p.earn) : 0; } });
+  return out;
+}
+function chartHtml() {
+  const w = weekly(), max = Math.max(...w.map(x => x.e), 1), tot = w.reduce((s, x) => s + x.e, 0);
+  const lab = x => new Date(x.t).toLocaleDateString('en-IN', {day: 'numeric', month: 'short'});
+  const bars = w.map((x, i) => { const h = Math.round(x.e / max * 120), X = 14 + i * 56; return `<g><rect x="${X}" y="${140 - h}" width="40" height="${h || 1}" rx="6" fill="${x.e ? 'var(--acc)' : 'var(--line)'}"/><text x="${X + 20}" y="${134 - h}" text-anchor="middle" font-size="11" fill="var(--ink)">${x.e ? '₹' + Math.round(x.e) : ''}</text><text x="${X + 20}" y="158" text-anchor="middle" font-size="10" fill="var(--mute)">${esc(lab(x))}</text></g>`; }).join('');
+  return `<h2>Earnings by week</h2><p class="small mute">Grouped by the week you saved each pin (PinProfit does not know the date a sale happened). Last 8 weeks, only the earnings you typed in.</p>
+  <svg viewBox="0 0 470 168" role="img" aria-label="Bar chart of earnings you logged, by week saved. Total in the last 8 weeks: ${Math.round(tot)} rupees." class="wkchart">${bars}</svg>
+  <table class="sr"><caption>Earnings by week saved</caption><tr><th>Week starting</th><th>Pins</th><th>Earned ₹</th></tr>${w.map(x => `<tr><td>${esc(lab(x))}</td><td>${x.n}</td><td>${x.e}</td></tr>`).join('')}</table>`;
+}
+/* ---------- backup and restore ---------- */
+const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+function cleanDB(raw) {
+  if (!raw || typeof raw !== 'object' || raw.app !== 'pinprofit' || !Array.isArray(raw.pins) || raw.pins.length > 5000) return null;
+  const pr = raw.prefs && typeof raw.prefs === 'object' ? raw.prefs : {};
+  const prefs = {amazon: clip(pr.amazon, 40), flipkart: clip(pr.flipkart, 40), disclosure: pr.disclosure === 'off' ? 'off' : 'on', discText: pr.discText === 'amazon' ? 'amazon' : 'general', autoTag: pr.autoTag === 'own' ? 'own' : 'auto', setup: ['no', 'done'].includes(pr.setup) ? pr.setup : ''};
+  const pins = raw.pins.filter(p => p && typeof p === 'object').map(p => ({id: clip(p.id, 20).replace(/[^\w-]/g, '') || Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Number.isFinite(+p.t) && +p.t > 0 ? +p.t : Date.now(), title: clip(p.title, 200), store: ['amazon', 'flipkart', 'meesho', 'myntra', 'other'].includes(p.store) ? p.store : 'other', url: /^https?:\/\//i.test(p.url) ? clip(p.url, 2000) : '', angle: clip(p.angle, 20), label: clip(p.label, 60), board: clip(p.board, 80), status: ['drafted', 'published', 'update'].includes(p.status) ? p.status : 'drafted', clicks: clip(p.clicks, 7), earn: clip(p.earn, 9), note: clip(p.note, 120)}));
+  return {prefs, pins};
+}
+function backupCard() {
+  return `<section class="card" id="bk"><h2>Back up and restore</h2><p class="small mute">Your pins live only in this browser. Download a backup file to keep them safe or move them to another phone or laptop.</p><div class="row"><button class="btn" id="bkOut" type="button">Download backup</button><label class="btn" for="bkIn" style="margin:0">Restore from backup<input id="bkIn" type="file" accept=".json,application/json" hidden></label></div><p id="bkMsg" class="small" role="status" aria-live="polite"></p></section>`;
+}
+function bindBackup() {
+  const out = $('#bkOut'), inp = $('#bkIn'), msg = $('#bkMsg'); if (!out) return;
+  out.addEventListener('click', () => { const data = JSON.stringify({app: 'pinprofit', version: 1, exported: new Date().toISOString(), prefs: DB.prefs, pins: DB.pins}, null, 1); const b = new Blob([data], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'pinprofit-backup-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); msg.textContent = 'Backup downloaded.'; });
+  inp.addEventListener('change', async () => { const f = inp.files[0]; inp.value = ''; if (!f) return;
+    if (f.size > 3e6) { msg.textContent = 'That file is too big to be a PinProfit backup.'; return; }
+    let clean = null; try { clean = cleanDB(JSON.parse(await f.text())); } catch (e) { /* invalid */ }
+    if (!clean) { msg.textContent = 'That does not look like a PinProfit backup file.'; return; }
+    const have = new Set(DB.pins.map(p => p.id)), fresh = clean.pins.filter(p => !have.has(p.id));
+    const replace = confirm(`Backup has ${clean.pins.length} pins.\n\nOK = replace what is on this device with the backup.\nCancel = only add the ${fresh.length} pins that are not here yet.`);
+    if (replace) { DB.prefs = clean.prefs; DB.pins = clean.pins; } else { DB.pins = DB.pins.concat(fresh); }
+    save(); updateBadge(); renderSaved(); const m2 = $('#bkMsg'); if (m2) m2.textContent = replace ? 'Backup restored.' : `Added ${fresh.length} pins.`; });
+}
 function renderSaved() {
   const pins = DB.pins;
   $('#app').innerHTML = `<section class="hero"><h1>My pins</h1><p class="mute">Track what you posted and what it earned. Numbers are the ones you type in; PinProfit does not read your Pinterest or affiliate accounts.</p></section>
   ${pins.length ? `<div class="grid3" id="sum">${sumHtml()}</div>
+  <section class="card" id="wk">${chartHtml()}</section>
   <div class="row sp" style="margin:1rem 0"><h2>All pins</h2><button class="btn" id="csv">Download as spreadsheet (CSV)</button></div>
   <div class="plist">${pins.map(p => `<article class="card sp-row" data-id="${esc(p.id)}"><div><b>${esc(p.title)}</b><p class="small mute">${esc(p.label)} · ${esc(STORE_NAME[p.store] || 'Shop')} · Board: ${esc(p.board)} · saved ${new Date(p.t).toLocaleDateString('en-IN')}</p></div>
     <div class="trk"><label>Status<select data-k="status"><option value="drafted" ${p.status === 'drafted' ? 'selected' : ''}>Drafted</option><option value="published" ${p.status === 'published' ? 'selected' : ''}>Published</option><option value="update" ${p.status === 'update' ? 'selected' : ''}>Needs update</option></select></label>
     <label>Clicks<input data-k="clicks" type="text" inputmode="numeric" maxlength="7" value="${esc(p.clicks)}"></label><label>Earned ₹<input data-k="earn" type="text" inputmode="decimal" maxlength="9" value="${esc(p.earn)}"></label>
     <label class="wide">Note<input data-k="note" type="text" maxlength="120" value="${esc(p.note)}"></label><button class="btn sm" data-del="1">Delete</button></div></article>`).join('')}</div>`
-  : `<div class="empty"><p><b>No saved pins yet.</b></p><p>Generate pins and press “Save to my pins” on the ones you post.</p><a class="btn pri" href="#/create">Create pins</a></div>`}`;
+  : `<div class="empty"><p><b>No saved pins yet.</b></p><p>Generate pins and press “Save to my pins” on the ones you post.</p><a class="btn pri" href="#/create">Create pins</a></div>`}
+  ${backupCard()}`;
+  bindBackup();
   const csv = $('#csv'); if (csv) csv.addEventListener('click', () => { const rows = [['Saved', 'Title', 'Style', 'Shop', 'Board', 'Status', 'Clicks', 'Earned (INR)', 'Note', 'Link']].concat(DB.pins.map(p => [new Date(p.t).toISOString().slice(0, 10), p.title, p.label, p.store, p.board, p.status, p.clicks, p.earn, p.note, p.url])); const b = new Blob(['﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')], {type: 'text/csv'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'pinprofit-pins.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
 }
-function onTrack(e) { const el = e.target.closest('[data-k]'); const card = el && el.closest('.sp-row'); if (!card) return; const p = DB.pins.find(x => x.id === card.dataset.id); if (!p) return; p[el.dataset.k] = el.value; save(); const sm = $('#sum'); if (sm) sm.innerHTML = sumHtml(); }
+function onTrack(e) { const el = e.target.closest('[data-k]'); const card = el && el.closest('.sp-row'); if (!card) return; const p = DB.pins.find(x => x.id === card.dataset.id); if (!p) return; p[el.dataset.k] = el.value; save(); const sm = $('#sum'); if (sm) sm.innerHTML = sumHtml(); const wk = $('#wk'); if (wk) wk.innerHTML = chartHtml(); }
 document.addEventListener('input', onTrack); document.addEventListener('change', onTrack);
 document.addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (!d) return; const card = d.closest('.sp-row'); if (!confirm('Delete this saved pin?')) return; DB.pins = DB.pins.filter(x => x.id !== card.dataset.id); save(); renderSaved(); });
 
@@ -211,3 +254,5 @@ function route() {
   document.title = name === 'home' ? 'PinProfit – Turn a product link into ready-to-post Pinterest pins' : ({create: 'Create pins', image: 'Pin image', saved: 'My pins'})[name] + ' – PinProfit';
 }
 load(); updateBadge(); window.addEventListener('hashchange', route); route();
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

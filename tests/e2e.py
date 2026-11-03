@@ -64,6 +64,28 @@ try:
     a.click('#gf button[type=submit]'); a.wait_for_timeout(400)
     a.locator('[data-copy=link]').click(); chk('copied link has tag','tag=mystore-21' in a.evaluate('navigator.clipboard.readText()'))
     a.select_option('#atm','own'); a.wait_for_timeout(200); chk('own mode no auto','automatically' not in a.inner_text('#linkInfo'))
+    # chart + backup
+    pg.goto(U+'#/saved'); pg.wait_for_timeout(300)
+    chk('chart has bar','₹120' in pg.inner_text('#wk') or '120' in pg.inner_text('#wk table') or pg.locator('#wk rect[fill="var(--acc)"]').count()==1)
+    with pg.expect_download() as bd: pg.click('#bkOut')
+    bp=bd.value.path(); import json as J; bj=J.load(open(bp)); chk('backup file',bj['app']=='pinprofit' and len(bj['pins'])==1)
+    pg.evaluate("localStorage.clear()"); pg.reload(); pg.wait_for_timeout(300)
+    chk('empty after clear',pg.locator('.sp-row').count()==0)
+    pg.on('dialog',lambda d:d.accept())
+    pg.set_input_files('#bkIn',bp); pg.wait_for_timeout(500)
+    chk('restored',pg.locator('.sp-row').count()==1 and '120' in pg.inner_text('#sum'))
+    open('/tmp/bad.json','w').write('{"hello":1}'); pg.set_input_files('#bkIn','/tmp/bad.json'); pg.wait_for_timeout(300)
+    chk('bad backup rejected','does not look like' in pg.inner_text('#bkMsg'))
+    evil={'app':'pinprofit','pins':[{'id':'x<y','title':'<img src=x onerror=alert(1)>','url':'javascript:alert(1)','store':'zzz','status':'hack','earn':'9'*50}],'prefs':{'amazon':'<b>'}}
+    J.dump(evil,open('/tmp/evil.json','w')); pg.set_input_files('#bkIn','/tmp/evil.json'); pg.wait_for_timeout(400)
+    st=pg.evaluate("JSON.parse(localStorage.getItem('pinprofit.v1'))"); p0=st['pins'][0]
+    chk('import sanitised',p0['url']=='' and p0['store']=='other' and p0['status']=='drafted' and len(p0['earn'])<=9 and pg.locator('.sp-row img').count()==0)
+    # pwa
+    mf=ctx.new_page(); r=mf.goto('http://localhost:8782/manifest.webmanifest'); mj=r.json(); chk('manifest',mj['display']=='standalone' and len(mj['icons'])==2)
+    for ic in mj['icons']: chk('icon '+ic['src'],mf.goto('http://localhost:8782/'+ic['src']).status==200)
+    pw=ctx.new_page(); pw.goto(U); pw.wait_for_timeout(1500)
+    chk('sw active',pw.evaluate("navigator.serviceWorker.getRegistration().then(r=>!!(r&&r.active))"))
+    ctx.set_offline(True); pw.reload(); pw.wait_for_timeout(500); chk('works offline','ready to post' in pw.inner_text('h1')); ctx.set_offline(False)
     # mobile
     m=ctx.new_page(); m.set_viewport_size({'width':375,'height':800}); m.goto(U)
     m.wait_for_timeout(200); chk('home no hscroll',m.evaluate('document.documentElement.scrollWidth<=window.innerWidth'))

@@ -66,3 +66,4 @@ section.rv h2,.band h2{margin:2rem 0 1rem}
 .pin,.hero,#gf{animation:rise .35s ease both}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.js .rv{opacity:1;transform:none}}
 .honest{margin-top:1.5rem}
+.wkchart{width:100%;height:auto;max-height:220px}.sr{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
