@@ -34,4 +34,51 @@ t('hostile input does not break generation', () => { const v = PP.generate({...b
 t('applyTag adds own ID to plain Amazon link', () => { const l = PP.parseLink('https://www.amazon.in/Women-Pink-Kurti/dp/B09XYZ1234'); const r = PP.applyTag(l, {amazon: 'me-21'}); assert(r.added && /[?&]tag=me-21/.test(r.url)); });
 t('applyTag never overwrites an existing tag', () => { const l = PP.parseLink('https://www.amazon.in/x/dp/B09XYZ1234?tag=other-21'); const r = PP.applyTag(l, {amazon: 'me-21'}); assert(!r.added && r.url.includes('other-21') && !r.url.includes('me-21')); });
 t('applyTag: Flipkart, short links, bad ids, no id', () => { const f = PP.parseLink('https://www.flipkart.com/some-kurti/p/itm123'); assert(/affid=fk1/.test(PP.applyTag(f, {flipkart: 'fk1'}).url)); assert(!PP.applyTag(PP.parseLink('https://amzn.to/abc123'), {amazon: 'me-21'}).added); const l = PP.parseLink('https://www.amazon.in/x/dp/B09XYZ1234'); assert(!PP.applyTag(l, {amazon: 'a"><b>'}).added); assert(!PP.applyTag(l, {}).added); });
+
+/* ---------- seasons and festivals ---------- */
+const Studio = require('../studio.js');
+const SEASON_IDS = ['diwali', 'wedding', 'rakhi', 'navratri', 'eid', 'xmas', 'sale'];
+const BAD_CLAIMS = /limited|hurry|last chance|only \d+ left|few left|selling fast|today only|ends (today|soon|tonight)|\d+ ?% ?off|flat \d|discount|deal|offer|sale price|lowest price|cheap|price drop|grab|don't miss|dont miss|running out|stock|before it'?s gone|best|guaranteed|#1|100%/i;
+t('season list is exactly the seven requested', () => assert.deepStrictEqual([...PP.SEASON_IDS].sort(), [...SEASON_IDS].sort()));
+t('no season (empty, missing, unknown) leaves output byte-for-byte unchanged', () => { const a = JSON.stringify(PP.generate(base)); ['', undefined, null, 'none', 'bogus', '__proto__'].forEach(x => assert.strictEqual(JSON.stringify(PP.generate({...base, season: x})), a, String(x))); });
+t('golden: normal first pin did not change', () => { const v = PP.generate(base)[0]; assert.strictEqual(v.title, 'Pink Cotton Printed Kurti: Elegant Festive Outfit Inspiration'); assert.strictEqual(v.board, 'Festive Outfit Ideas'); assert(!('season' in v)); });
+SEASON_IDS.forEach(id => {
+  const se = PP.SEASONS[id];
+  t(id + ': five pins, distinct titles, season board, limits respected', () => {
+    [0, 1, 2, 3].forEach(counter => ['kurti', 'dress', 'saree', 'jeans', 'other'].forEach(cat => {
+      const v = PP.generate({...base, category: cat, season: id, counter});
+      assert.strictEqual(v.length, 5); assert.strictEqual(new Set(v.map(x => x.title)).size, 5, id + cat + counter);
+      v.forEach(x => { assert.strictEqual(x.season, id); assert.strictEqual(x.board, se.board); assert(x.title.length <= 100 && x.description.length <= 500 && x.alt.length <= 500 && x.keywords.length <= 6, x.title);
+        assert(x.text.includes(x.title) && x.text.includes(x.alt) && x.text.includes(se.board)); });
+    }));
+  });
+  t(id + ': copy, hashtags and alt text mention the season', () => PP.generate({...base, season: id}).forEach(x => {
+    assert(x.title.toLowerCase().includes(se.S.toLowerCase()) || x.title.toLowerCase().includes(se.EV.toLowerCase()), x.title);
+    assert(x.alt.includes(se.S), x.alt); assert(se.tags.every(h => x.hashtags.includes(h)), x.hashtags.join());
+    assert(x.hashtags.length <= 5 && new Set(x.hashtags).size === x.hashtags.length && x.hashtags.every(h => /^#[a-z0-9]+$/.test(h)), x.hashtags.join());
+    assert(x.keywords.some(k => /\w/.test(k)));
+  }));
+  t(id + ': no invented discounts, urgency or superlatives in any output', () => {
+    [0, 1, 2, 3, 4, 5].forEach(counter => ['kurti', 'dress', 'saree', 'coord', 'other'].forEach(cat => PP.generate({...base, category: cat, season: id, counter, details: 'cotton, 3/4 sleeves', price: '649'}).forEach(x => assert(!BAD_CLAIMS.test(x.text), id + ': ' + x.text))));
+    [...se.badges, ...se.ctas, ...Object.values(se.styling).flat(), se.board, se.altTail].forEach(x => assert(!BAD_CLAIMS.test(x), x));
+  });
+  t(id + ': price only when the user typed one, still a rounded "Under" line', () => {
+    assert(PP.generate({...base, season: id}).every(x => !/₹|under \d/i.test(x.text)));
+    const b = PP.generate({...base, season: id, price: '649'}).find(x => x.angle === 'budget'); assert(/Under ₹699 at the time of posting\./.test(b.description));
+  });
+  t(id + ': deterministic, and regenerate changes the wording', () => { const a = PP.generate({...base, season: id}); assert.deepStrictEqual(a, PP.generate({...base, season: id})); assert.notDeepStrictEqual(a.map(x => x.title), PP.generate({...base, season: id, counter: 1}).map(x => x.title)); });
+  t(id + ': disclosure kept, details kept, hostile input safe', () => {
+    PP.generate({...base, season: id, details: 'cotton'}).forEach(x => assert(x.description.includes('Affiliate link:') && x.description.includes('Details: cotton.')));
+    const v = PP.generate({...base, season: id, title: '<script>alert(1)</script> ' + 'A'.repeat(500), details: 'x '.repeat(200), colour: '"><b>'}); assert.strictEqual(v.length, 5); v.forEach(x => assert(x.title.length <= 100 && x.description.length <= 800));
+  });
+  t(id + ': studio colours, badge and CTA suggestions are usable', () => {
+    const th = Studio.SEASON_THEMES[id]; assert(th, 'no studio theme'); 
+    const lum = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4)); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+    const cr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+    assert(cr(th.accent, th.onAccent) >= 4.5, 'badge text contrast ' + cr(th.accent, th.onAccent)); assert(cr(th.bg, th.fg) >= 7, 'headline contrast ' + cr(th.bg, th.fg));
+    assert(se.badges.length >= 3 && se.badges.every(x => x.length <= 24), 'badges (input maxlength 24)'); assert(se.ctas.length >= 3 && se.ctas.every(x => x.length <= 30), 'ctas (input maxlength 30)');
+  });
+});
+t('studio: base colour list is unchanged and season colours are separate', () => { assert.deepStrictEqual(Object.keys(Studio.THEMES), ['rose', 'cream', 'forest', 'ink', 'lilac']); SEASON_IDS.forEach(id => assert(!Studio.THEMES[id])); });
+t('season pins carry no leftover angle hashtag from another occasion', () => PP.generate({...base, season: 'diwali'}).forEach(x => assert(!/#(collegeoutfit|festiveoutfit|partyoutfit)/.test(x.hashtags.join(' ')))));
 console.log('unit tests passed:', n);

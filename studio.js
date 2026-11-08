@@ -9,6 +9,16 @@ const Studio = (() => {
     ink: {name: 'Ink', bg: '#1d1a2b', fg: '#f6f1ff', accent: '#ffb84d', onAccent: '#1d1a2b'},
     lilac: {name: 'Lilac', bg: '#ece6fb', fg: '#251a4a', accent: '#6a4fe0', onAccent: '#ffffff'},
   };
+  // Colour sets for the optional Season choice. Kept apart from THEMES so the normal colour row is unchanged when no season is picked.
+  const SEASON_THEMES = {
+    diwali: {name: 'Diwali', bg: '#fff1d6', fg: '#3a1a05', accent: '#c2410c', onAccent: '#ffffff'},
+    wedding: {name: 'Wedding season', bg: '#fdf0f0', fg: '#4a1620', accent: '#9b2c3f', onAccent: '#ffffff'},
+    rakhi: {name: 'Raksha Bandhan', bg: '#fff0f3', fg: '#3a1022', accent: '#be185d', onAccent: '#ffffff'},
+    navratri: {name: 'Navratri and Durga Puja', bg: '#f6e9ff', fg: '#2b0f4d', accent: '#a21caf', onAccent: '#ffffff'},
+    eid: {name: 'Eid', bg: '#e6f4ee', fg: '#0e3328', accent: '#0f766e', onAccent: '#ffffff'},
+    xmas: {name: 'Christmas and New Year', bg: '#fdecec', fg: '#1f3a2a', accent: '#b91c1c', onAccent: '#ffffff'},
+    sale: {name: 'Big sale days', bg: '#fff8d6', fg: '#1c1917', accent: '#1d4ed8', onAccent: '#ffffff'},
+  };
   const TEMPLATES = {band: 'Bottom band', frame: 'Framed photo', badge: 'Top badge', split: 'Split', minimal: 'Minimal'};
   const SANS = '"Helvetica Neue", Arial, system-ui, sans-serif', SERIF = 'Georgia, "Times New Roman", serif';
 
@@ -31,7 +41,7 @@ const Studio = (() => {
     ctx.restore();
   }
   function draw(canvas, o) {
-    const c = canvas.getContext('2d'), th = THEMES[o.theme] || THEMES.rose, img = o.img || null;
+    const c = canvas.getContext('2d'), th = THEMES[o.theme] || SEASON_THEMES[o.theme] || THEMES.rose, img = o.img || null;
     canvas.width = W; canvas.height = H; c.clearRect(0, 0, W, H); c.textBaseline = 'alphabetic'; c.textAlign = 'left';
     const head = String(o.headline || '').trim(), small = String(o.small || '').trim(), cta = String(o.cta || '').trim();
     const heavy = s => `800 ${s}px ${SANS}`, serif = s => `700 ${s}px ${SERIF}`;
@@ -79,6 +89,6 @@ const Studio = (() => {
     if (window.createImageBitmap) { try { return await createImageBitmap(file, {imageOrientation: 'from-image'}); } catch (e) { /* fall through */ } }
     return new Promise((res, rej) => { const u = URL.createObjectURL(file), i = new Image(); i.onload = () => { URL.revokeObjectURL(u); res(i); }; i.onerror = () => { URL.revokeObjectURL(u); rej(new Error('That file could not be read as a photo.')); }; i.src = u; });
   }
-  return {W, H, THEMES, TEMPLATES, draw, loadImage};
+  return {W, H, THEMES, SEASON_THEMES, TEMPLATES, draw, loadImage};
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Studio;

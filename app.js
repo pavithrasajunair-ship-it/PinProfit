@@ -30,7 +30,8 @@ async function doCopy(btn, text, label) {
 }
 
 /* ---------- state ---------- */
-const S = {form: {url: '', title: '', category: 'other', colour: '', price: '', details: '', touched: {}}, link: null, results: null, counter: 0, studio: {img: null, imgName: '', template: 'band', theme: 'rose', headline: '', small: '', cta: 'Shop the look'}};
+const S = {form: {url: '', title: '', category: 'other', colour: '', price: '', details: '', season: '', touched: {}}, link: null, results: null, counter: 0, studio: {img: null, imgName: '', template: 'band', theme: 'rose', headline: '', small: '', cta: 'Shop the look', season: ''}};
+const seasonOptions = sel => `<option value="" ${sel ? '' : 'selected'}>None (everyday pins)</option>` + PP.SEASON_IDS.map(k => `<option value="${esc(k)}" ${k === sel ? 'selected' : ''}>${esc(PP.SEASONS[k].name)}</option>`).join('');
 const disclosureText = (l = S.link) => { if (DB.prefs.disclosure !== 'on') return ''; const amz = l && l.store === 'amazon'; return DB.prefs.discText === 'amazon' && amz ? PP.DISCLOSURES.amazon : DB.prefs.discText === 'amazon' ? PP.DISCLOSURES.general : PP.DISCLOSURES.general; };
 
 /* ---------- create view ---------- */
@@ -67,6 +68,9 @@ function renderCreate() {
       <div><label for="colour">Colour</label><input id="colour" type="text" maxlength="30" placeholder="e.g. pink" value="${esc(f.colour)}"></div>
       <div><label for="price">Price in ₹ <span class="mute">optional</span></label><input id="price" type="text" inputmode="numeric" maxlength="7" placeholder="e.g. 649" value="${esc(f.price)}"></div>
     </div>
+    <label for="season">Season or festival <span class="mute">optional: adds festive wording, hashtags and board name</span></label>
+    <select id="season">${seasonOptions(f.season)}</select>
+    <p class="small mute" id="seasonNote">${f.season ? 'The wording and hashtags will mention ' + esc(PP.SEASONS[f.season].name) + '. No prices, offers or deadlines are added.' : ''}</p>
     <label for="details">Details you know are true <span class="mute">optional: fabric, sleeves, set contents</span></label>
     <input id="details" type="text" maxlength="140" placeholder="cotton, 3/4 sleeves, with dupatta" value="${esc(f.details)}">
     <details class="set" id="mysetup"><summary>My setup: affiliate IDs and disclosure line</summary>
@@ -81,7 +85,7 @@ function renderCreate() {
   <div id="results" aria-live="polite"></div>`;
   bindCreate(); if (S.results) renderResults();
 }
-function readForm() { const f = S.form; f.url = $('#url').value; f.title = $('#title').value; f.category = $('#cat').value; f.colour = $('#colour').value; f.price = $('#price').value; f.details = $('#details').value; }
+function readForm() { const f = S.form; f.url = $('#url').value; f.title = $('#title').value; f.category = $('#cat').value; f.colour = $('#colour').value; f.price = $('#price').value; f.details = $('#details').value; f.season = PP.seasonOf($('#season').value) ? $('#season').value : ''; }
 function bindCreate() {
   const info = () => { $('#linkInfo').innerHTML = linkNotes(); };
   const apply = () => {
@@ -94,6 +98,7 @@ function bindCreate() {
   };
   $('#url').addEventListener('input', apply); $('#url').addEventListener('paste', () => setTimeout(apply, 0));
   $('#title').addEventListener('input', () => { S.form.touched.title = true; const t = $('#title').value; if (!S.form.touched.category) $('#cat').value = PP.detectCategory(t); if (!S.form.touched.colour) $('#colour').value = PP.detectColour(t); readForm(); });
+  $('#season').addEventListener('change', () => { readForm(); const n = $('#seasonNote'); n.textContent = S.form.season ? 'The wording and hashtags will mention ' + PP.SEASONS[S.form.season].name + '. No prices, offers or deadlines are added.' : ''; });
   $('#cat').addEventListener('change', () => { S.form.touched.category = true; readForm(); });
   $('#colour').addEventListener('input', () => { S.form.touched.colour = true; readForm(); });
   ['price', 'details'].forEach(id => $('#' + id).addEventListener('input', readForm));
@@ -109,8 +114,8 @@ function bindCreate() {
 }
 function generate() {
   const f = S.form;
-  S.results = PP.generate({title: f.title, category: f.category, colour: f.colour, details: f.details, price: f.price, disclosure: disclosureText(), counter: S.counter});
-  S.snapshot = {url: S.link && S.link.ok ? finalLink(S.link).url : f.url.trim(), store: S.link ? S.link.store : 'other', price: f.price};
+  S.results = PP.generate({title: f.title, category: f.category, colour: f.colour, details: f.details, price: f.price, disclosure: disclosureText(), counter: S.counter, season: f.season});
+  S.snapshot = {url: S.link && S.link.ok ? finalLink(S.link).url : f.url.trim(), store: S.link ? S.link.store : 'other', price: f.price, season: f.season};
   renderResults();
 }
 const meter = (n, soft, hard) => `<span class="cnt ${n > hard ? 'bad' : n > soft ? 'warn' : ''}">${n}/${soft}</span>`;
@@ -134,12 +139,16 @@ document.addEventListener('click', e => {
   if (b.dataset.copy === 'link') return doCopy(b, S.snapshot.url, 'Link');
   const card = b.closest('.pin'); if (!card) return; const v = S.results[+card.dataset.i];
   if (b.dataset.copy) { const map = {title: v.title, description: v.description, alt: v.alt, all: v.text + (S.snapshot.url ? '\n\nLINK\n' + S.snapshot.url : '')}; return doCopy(b, map[b.dataset.copy], b.dataset.copy === 'all' ? 'Everything' : b.dataset.copy[0].toUpperCase() + b.dataset.copy.slice(1)); }
-  if (b.dataset.act === 'image') { const bk = PP.priceBucket(S.snapshot.price); Object.assign(S.studio, {headline: v.title, small: bk ? `Under ₹${bk.toLocaleString('en-IN')}` : '', cta: 'Shop the look'}); location.hash = '#/image'; }
+  if (b.dataset.act === 'image') { const bk = PP.priceBucket(S.snapshot.price); const se = PP.seasonOf(S.snapshot.season); Object.assign(S.studio, {headline: v.title, small: bk ? `Under ₹${bk.toLocaleString('en-IN')}` : '', cta: se ? se.ctas[0] : 'Shop the look', season: se ? se.id : '', theme: se ? se.id : (Studio.THEMES[S.studio.theme] ? S.studio.theme : 'rose')}); location.hash = '#/image'; }
   if (b.dataset.act === 'save') { DB.pins.unshift({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: Date.now(), title: v.title, store: S.snapshot.store, url: S.snapshot.url, angle: v.angle, label: v.label, board: v.board, desc: v.description, alt: v.alt, status: 'drafted', clicks: '', earn: '', note: ''}); save(); toast('Saved to My pins'); b.textContent = 'Saved ✓'; b.disabled = true; }
 });
 
 /* ---------- pin image view ---------- */
 let raf = 0; const redraw = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { const c = $('#cv'); if (c) Studio.draw(c, S.studio); }); };
+const swatch = (k, t, on) => `<button type="button" class="sw" data-k="${esc(k)}" aria-pressed="${on}" aria-label="${esc(t.name)}" title="${esc(t.name)}" style="background:linear-gradient(135deg,${t.bg} 50%,${t.accent} 50%)"></button>`;
+const thmHtml = () => { const s = S.studio, se = Studio.SEASON_THEMES[s.season]; return Object.entries(Studio.THEMES).map(([k, t]) => swatch(k, t, k === s.theme)).join('') + (se ? swatch(s.season, se, s.theme === s.season) : ''); };
+const sugHtml = () => { const se = PP.seasonOf(S.studio.season); if (!se) return ''; const chips = (k, arr) => arr.map(x => `<button type="button" class="btn sm" data-fill="${k}" data-v="${esc(x)}">${esc(x)}</button>`).join(' ');
+  return `<p class="mute">Badge text ideas (tap to use)</p><div class="actions">${chips('small', se.badges)}</div><p class="mute">Call to action ideas</p><div class="actions">${chips('cta', se.ctas)}</div><p class="mute">Suggestions only. Add a price or offer to the image only if it is true on the day you post.</p>`; };
 function renderImage() {
   const s = S.studio;
   $('#app').innerHTML = `<section class="hero"><h1>Make the pin image</h1><p class="mute">Upload your own photo, pick a layout, and download a 1000 × 1500 pin (the 2:3 shape Pinterest likes).</p></section>
@@ -148,14 +157,18 @@ function renderImage() {
     <label for="photo">Your photo</label><input id="photo" type="file" accept="image/png,image/jpeg,image/webp"><div class="err" id="photoErr" role="alert"></div>
     <p class="small mute">Use photos you took or have permission to use. Product photos copied from shopping sites may not be allowed by the shop or your affiliate programme. The photo stays on your device.</p>
     <label>Layout</label><div class="seg" id="tpl" role="group" aria-label="Layout">${Object.entries(Studio.TEMPLATES).map(([k, n]) => `<button type="button" class="tab" data-k="${k}" aria-pressed="${k === s.template}">${esc(n)}</button>`).join('')}</div>
-    <label>Colours</label><div class="seg" id="thm" role="group" aria-label="Colours">${Object.entries(Studio.THEMES).map(([k, t]) => `<button type="button" class="sw" data-k="${k}" aria-pressed="${k === s.theme}" aria-label="${esc(t.name)}" title="${esc(t.name)}" style="background:linear-gradient(135deg,${t.bg} 50%,${t.accent} 50%)"></button>`).join('')}</div>
+    <label for="ssn">Season or festival <span class="mute">optional: suggests colours, badge text and a call to action</span></label><select id="ssn">${seasonOptions(s.season)}</select>
+    <label>Colours</label><div class="seg" id="thm" role="group" aria-label="Colours">${thmHtml()}</div>
     <label for="hd">Headline</label><textarea id="hd" rows="3" maxlength="120">${esc(s.headline)}</textarea>
     <div class="grid2"><div><label for="sm">Badge text</label><input id="sm" type="text" maxlength="24" placeholder="Under ₹699" value="${esc(s.small)}"></div><div><label for="ct">Call to action</label><input id="ct" type="text" maxlength="30" value="${esc(s.cta)}"></div></div>
+    <div id="sug" class="small">${sugHtml()}</div>
     <div class="actions"><button class="btn pri" id="dl">Download pin (PNG)</button><button class="btn" id="cpimg">Copy image</button></div>
     <p class="small mute" id="imgNote"></p></div></div>`;
   $('#photo').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { s.img = await Studio.loadImage(f); s.imgName = f.name; $('#photoErr').textContent = ''; redraw(); } catch (err) { $('#photoErr').textContent = err.message; e.target.value = ''; } });
   $('#tpl').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; s.template = b.dataset.k; $$('#tpl .tab').forEach(x => x.setAttribute('aria-pressed', x === b)); redraw(); });
   $('#thm').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; s.theme = b.dataset.k; $$('#thm .sw').forEach(x => x.setAttribute('aria-pressed', x === b)); redraw(); });
+  $('#ssn').addEventListener('change', e => { const v = PP.seasonOf(e.target.value) ? e.target.value : ''; s.season = v; if (v) { s.theme = v; if (!s.small.trim()) s.small = ''; } else if (!Studio.THEMES[s.theme]) s.theme = 'rose'; $('#thm').innerHTML = thmHtml(); $('#sug').innerHTML = sugHtml(); redraw(); });
+  $('#sug').addEventListener('click', e => { const b = e.target.closest('[data-fill]'); if (!b) return; const k = b.dataset.fill; s[k] = b.dataset.v; $(k === 'small' ? '#sm' : '#ct').value = b.dataset.v; redraw(); });
   [['hd', 'headline'], ['sm', 'small'], ['ct', 'cta']].forEach(([id, k]) => $('#' + id).addEventListener('input', e => { s[k] = e.target.value; redraw(); }));
   const blob = () => new Promise(res => $('#cv').toBlob(res, 'image/png'));
   $('#dl').addEventListener('click', async () => { Studio.draw($('#cv'), s); const b = await blob(); if (!b) { $('#imgNote').textContent = 'The image could not be created. Try a smaller photo.'; return; } const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'pinprofit-pin.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Pin downloaded'); });
@@ -232,10 +245,10 @@ document.addEventListener('click', e => { const d = e.target.closest('[data-del]
 
 /* ---------- many links at once ---------- */
 const BULK_MAX = 20;
-S.bulk = {text: '', rows: []};
+S.bulk = {text: '', rows: [], season: ''};
 function bulkPin(r) {
   if (!r.title.trim()) return null;
-  return PP.generate({title: r.title, category: r.cat, colour: r.colour, details: '', price: '', disclosure: disclosureText(r.link), counter: r.counter})[r.style];
+  return PP.generate({title: r.title, category: r.cat, colour: r.colour, details: '', price: '', disclosure: disclosureText(r.link), counter: r.counter, season: S.bulk.season})[r.style];
 }
 function bulkRowHtml(r, i) {
   const l = r.link, fl = r.fl, v = r.ok ? bulkPin(r) : null;
@@ -255,7 +268,7 @@ function bulkPinHtml(r, i, v) {
 const bulkText = (r, v) => v.text + (r.fl.url ? '\n\nLINK\n' + r.fl.url : '');
 function renderBulk() {
   $('#app').innerHTML = `<section class="hero"><h1>Many links at once</h1><p class="mute">Paste up to ${BULK_MAX} Amazon or Flipkart links, one per line. You get a pin for each, with your affiliate ID added if you saved it.</p></section>
-  <form id="bf" class="card" novalidate><label for="bt">Product links (one per line)</label><textarea id="bt" rows="7" maxlength="20000" placeholder="https://www.amazon.in/...&#10;https://www.flipkart.com/...">${esc(S.bulk.text)}</textarea><p id="bmsg" class="err" role="alert"></p><p><button class="btn pri" type="submit">Make my pins</button></p></form><div id="bout" aria-live="polite"></div>`;
+  <form id="bf" class="card" novalidate><label for="bseason">Season or festival <span class="mute">optional</span></label><select id="bseason">${seasonOptions(S.bulk.season)}</select><label for="bt">Product links (one per line)</label><textarea id="bt" rows="7" maxlength="20000" placeholder="https://www.amazon.in/...&#10;https://www.flipkart.com/...">${esc(S.bulk.text)}</textarea><p id="bmsg" class="err" role="alert"></p><p><button class="btn pri" type="submit">Make my pins</button></p></form><div id="bout" aria-live="polite"></div>`;
   const out = () => {
     const rows = S.bulk.rows; if (!rows.length) { $('#bout').innerHTML = ''; return; }
     const okRows = rows.filter(r => r.ok && r.title.trim());
@@ -269,6 +282,7 @@ function renderBulk() {
     S.bulk.rows = lines.slice(0, BULK_MAX).map(x => { const l = PP.parseLink(x); const t = l.ok ? l.slugTitle : ''; return {raw: x, link: l, ok: l.ok, fl: l.ok ? finalLink(l) : null, title: t, cat: PP.detectCategory(t), colour: PP.detectColour(t), style: 0, counter: 0, saved: false}; });
     out();
   });
+  $('#bseason').addEventListener('change', e => { S.bulk.season = PP.seasonOf(e.target.value) ? e.target.value : ''; S.bulk.rows.forEach(r => { r.saved = false; }); out(); });
   const bo = $('#bout');
   bo.addEventListener('input', e => { const el = e.target.closest('[data-bname]'); if (!el) return; const i = +el.closest('[data-r]').dataset.r, r = S.bulk.rows[i]; r.title = el.value; r.cat = PP.detectCategory(r.title); r.colour = PP.detectColour(r.title); r.saved = false; $('#bp' + i).innerHTML = bulkPinHtml(r, i, bulkPin(r)); });
   bo.addEventListener('change', e => { const el = e.target.closest('[data-bstyle]'); if (!el) return; const i = +el.closest('[data-r]').dataset.r, r = S.bulk.rows[i]; r.style = +el.value; r.saved = false; $('#bp' + i).innerHTML = bulkPinHtml(r, i, bulkPin(r)); });

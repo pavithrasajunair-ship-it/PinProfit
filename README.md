@@ -18,10 +18,11 @@ Paste an Amazon or Flipkart product link and get 5 ready-to-post Pinterest pin v
 Pinterest limits: title up to 100 characters, description up to 800 (about 500 reads best), alt text up to 500.
 
 ## Run / test
-Static site, no build. `node tests/unit.js` (30) and `python3 tests/e2e.py` (69, needs Playwright).
+Static site, no build. `node tests/unit.js`, `python3 tests/e2e.py` and `python3 tests/seasons_e2e.py` (need Playwright).
 Deploy on Vercel: Framework "Other", no build command.
 
 ## Also included
+- Season selector (default none): Diwali, wedding season, Raksha Bandhan, Navratri and Durga Puja, Eid, Christmas and New Year, big sale days. It changes the pin titles, descriptions, hashtags, alt text and board name, and the image studio gets matching colours plus badge and call-to-action ideas. It never adds prices, offers or urgency. With no season chosen, output is exactly as before.
 - Many links at once: paste up to 20 links, get a pin for each, copy or save them all.
 - Posting plan: spreads saved pins across days (1 to 5 per day), copy a whole day, mark pins as posted.
 - Colour mode switch: Auto (follows your phone), Light or Dark, remembered on the device.

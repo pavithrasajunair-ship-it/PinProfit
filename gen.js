@@ -127,6 +127,73 @@ const PP = (() => {
   }
   const priceBucket = p => { const n = Math.round(Number(p)); if (!(n > 0)) return 0; return [299, 399, 499, 599, 699, 799, 999, 1299, 1499, 1999, 2499, 2999, 3999, 4999].find(b => b >= n) || 0; };
 
+
+  /* ---------- seasons and festivals ----------
+     Optional overlay on the same generator. With no season chosen nothing below runs, so the normal output is unchanged.
+     Copy only talks about the occasion and styling. It never invents discounts, prices, stock levels or deadlines. */
+  const SEASON_STYLE = [  // the five pin versions keep their order; each reads as a different take on the same occasion
+    {key: 'Occasion outfit', tag: '#outfitideas', titles: ['{Short} for {S} Outfit Ideas', '{S} Outfit Idea: {Short}'], hooks: ['Planning your {s} outfit? This {short} is an easy pick.', '{S} outfit idea: a {short} that is easy to style.']},
+    {key: 'Easy and everyday', tag: '#easyoutfit', titles: ['Easy {S} Look with a {Short}', '{Short}: Easy {S} Styling'], hooks: ['Need an easy {s} look? Try a {short}.', 'A {short} for your {s} plans that you can wear again after.']},
+    {key: 'Minimal and clean', tag: '#minimalfashion', titles: ['Minimal {Short} Idea for {S}', 'Simple {S} Look: {Short}'], hooks: ['Keep {s} simple and clean with a {short}.', 'A minimal {short} for {s}: simple to style.']},
+    {key: 'Budget find', tag: '#budgetfashion', titles: ['Budget-Friendly {S} Outfit: {Short}', 'Affordable {Short} for {S}'], hooks: ['Looking for an affordable {short} for your {s} plans? Here is one to consider.', 'Budget-friendly {s} outfit idea: a {short} to check out.']},
+    {key: 'Gatherings and evenings', tag: '#eveningoutfit', titles: ['{Short} for {EV}', '{EV} Look: {Short}'], hooks: ['Dressing up for {ev}? A {short} is a good starting point.', '{S} evening idea: a {short} that suits dressy occasions.']},
+  ];
+  const SEASONS = {
+    diwali: {id: 'diwali', name: 'Diwali', S: 'Diwali', s: 'Diwali', EV: 'Diwali Gatherings', ev: 'Diwali gatherings', board: 'Diwali Outfit Ideas',
+      tags: ['#diwalioutfit', '#diwalifashion'], kw: ['diwali outfit ideas', 'diwali outfit for women', 'festive wear for women'], altTail: 'Festive styling inspiration.',
+      styling: {e: ['Add jhumkas and gold-toned bangles for a festive finish.', 'Style it with juttis and a potli bag.', 'Keep the jewellery graceful and let the colours shine.'], w: ['Add statement earrings and a small clutch for a festive finish.', 'Pair it with block heels or embellished flats.', 'Add gold-toned accessories for a festive touch.']},
+      badges: ['Diwali outfit idea', 'Festive look', 'Diwali wardrobe idea'], ctas: ['See the details', 'Check the current price', 'Tap to see the look']},
+    wedding: {id: 'wedding', name: 'Wedding season', S: 'Wedding Season', s: 'wedding season', EV: 'Wedding Events', ev: 'wedding events', board: 'Wedding Guest Outfits',
+      tags: ['#weddingguestoutfit', '#weddingseason'], kw: ['wedding guest outfit ideas', 'wedding season outfits', 'outfit for wedding function'], altTail: 'Wedding guest styling inspiration.',
+      styling: {e: ['Add a statement necklace and a potli bag for wedding events.', 'Pair it with embellished juttis and soft curls.', 'Match accessories to one colour for a polished wedding-guest look.'], w: ['Pair it with block heels and a structured clutch.', 'Add drop earrings and sleek hair for a dressy finish.', 'Keep accessories simple so the outfit stands out.']},
+      badges: ['Wedding guest idea', 'Wedding season look', 'Function outfit idea'], ctas: ['See the details', 'Check the current price', 'Tap to see the look']},
+    rakhi: {id: 'rakhi', name: 'Raksha Bandhan', S: 'Raksha Bandhan', s: 'Raksha Bandhan', EV: 'Rakhi Celebrations', ev: 'rakhi celebrations', board: 'Raksha Bandhan Outfits',
+      tags: ['#rakshabandhan', '#rakhioutfit'], kw: ['raksha bandhan outfit ideas', 'rakhi outfit for women', 'festive wear for women'], altTail: 'Festive family-day styling inspiration.',
+      styling: {e: ['Add jhumkas and bangles to match the festive mood.', 'Style it with juttis for a comfortable family day.', 'Soft makeup and a simple bun keep the look easy.'], w: ['Add small earrings and flats for a relaxed family day.', 'Pair it with a clutch and simple jewellery.', 'Keep it comfortable for a long day of celebrations.']},
+      badges: ['Rakhi outfit idea', 'Raksha Bandhan look', 'Festive family look'], ctas: ['See the details', 'Check the current price', 'Tap to see the look']},
+    navratri: {id: 'navratri', name: 'Navratri and Durga Puja', S: 'Navratri and Durga Puja', s: 'Navratri and Durga Puja', EV: 'Navratri and Puja Evenings', ev: 'Navratri and puja evenings', board: 'Navratri and Durga Puja Outfits',
+      tags: ['#navratrioutfit', '#durgapuja'], kw: ['navratri outfit ideas', 'durga puja outfit ideas', 'festive wear for women'], altTail: 'Festive evening styling inspiration.',
+      styling: {e: ['Add oxidised jewellery and a colourful dupatta for festive evenings.', 'Pick comfortable footwear for long evenings.', 'Match accessories to the colour of the day if you follow the Navratri colours.'], w: ['Pair it with comfortable flats or sneakers for long evenings.', 'Add oxidised earrings for a festive touch.', 'Keep the look easy to move in.']},
+      badges: ['Navratri outfit idea', 'Durga Puja look', 'Festive evening look'], ctas: ['See the details', 'Check the current price', 'Tap to see the look']},
+    eid: {id: 'eid', name: 'Eid', S: 'Eid', s: 'Eid', EV: 'Eid Gatherings', ev: 'Eid gatherings', board: 'Eid Outfit Ideas',
+      tags: ['#eidoutfit', '#eidfashion'], kw: ['eid outfit ideas', 'eid outfit for women', 'festive wear for women'], altTail: 'Eid styling inspiration.',
+      styling: {e: ['Add pearl or gold-toned jewellery for a graceful look.', 'Style it with embellished juttis and a clutch.', 'Keep makeup soft and let the outfit stand out.'], w: ['Add statement earrings and a clutch for Eid gatherings.', 'Pair it with block heels or neat flats.', 'Choose soft, matching accessories for a polished look.']},
+      badges: ['Eid outfit idea', 'Eid look', 'Festive Eid look'], ctas: ['See the details', 'Check the current price', 'Tap to see the look']},
+    xmas: {id: 'xmas', name: 'Christmas and New Year', S: 'Christmas and New Year', s: 'Christmas and New Year', EV: 'Christmas and New Year Parties', ev: 'Christmas and New Year parties', board: 'Christmas and New Year Outfits',
+      tags: ['#christmasoutfit', '#newyearoutfit'], kw: ['christmas outfit ideas', 'new year party outfit', 'party wear for women'], altTail: 'Party styling inspiration.',
+      styling: {e: ['Add a statement necklace for a festive evening.', 'Pair it with juttis or heels and a small clutch.', 'Keep accessories simple and let the colour stand out.'], w: ['Add a clutch and drop earrings for party evenings.', 'Pair it with boots or heels for a dressy finish.', 'Layer a jacket for cooler evenings.']},
+      badges: ['Christmas outfit idea', 'New Year party look', 'Party outfit idea'], ctas: ['See the details', 'Check the current price', 'Tap to see the look']},
+    sale: {id: 'sale', name: 'Big sale days', S: 'Sale Day', s: 'sale day', EV: 'Shopping Days', ev: 'a day of shopping', board: 'Sale Day Finds',
+      tags: ['#saledayfinds', '#shoppingideas'], kw: ['outfit ideas for sale days', 'wardrobe wishlist ideas', 'affordable outfits'], altTail: 'Everyday styling inspiration.',
+      styling: {e: ['Mix it with pieces you already own to make more looks.', 'One {noun} can be styled in several ways.', 'Pair it with basics from your wardrobe.'], w: ['Mix it with pieces you already own to make more looks.', 'One {noun} can be styled in several ways.', 'Pair it with basics from your wardrobe.']},
+      badges: ['Wishlist pick', 'Sale day outfit idea', 'Wardrobe idea'], ctas: ['Check the current price', 'See the details', 'Tap to see the look']},
+  };
+  const SEASON_IDS = Object.keys(SEASONS);
+  const seasonOf = id => typeof id === 'string' && Object.prototype.hasOwnProperty.call(SEASONS, id) ? SEASONS[id] : null;
+
+
+  function seasonPin(c) {
+    const {a, ai, se, e, cat, Short, short, colour, details, bucket, disclosure, counter, seedBase} = c, st = SEASON_STYLE[ai];
+    const r = rng(seedBase ^ hash(a.id + se.id + counter)), v = counter % 2;
+    const fill = x => x.replace(/\{Short\}/g, Short).replace(/\{short\}/g, short).replace(/\{noun\}/g, cat.noun).replace(/\{S\}/g, se.S).replace(/\{s\}/g, se.s).replace(/\{EV\}/g, se.EV).replace(/\{ev\}/g, se.ev);
+    const ttl = trimTo(fill(st.titles[v]), 100), hook = fill(st.hooks[v]);
+    const s1 = fill(pick(se.styling[e], r)), cta = pick(CTA, r);
+    const detailLine = details ? `Details: ${details}.` : '';
+    const priceLine = bucket && (a.id === 'budget' || c.alwaysPrice) ? `Under ₹${bucket.toLocaleString('en-IN')} at the time of posting.` : '';
+    const tags = Array.from(new Set(['#' + cat.tag, ...se.tags, st.tag, colour ? '#' + colour.replace(/\s+/g, '') + 'outfit' : '#' + (cat.ethnic ? 'ethnicwear' : 'fashioninspo')])).slice(0, 5);
+    const body = [hook, detailLine, s1, priceLine, cta].filter(Boolean);
+    let desc = body.join(' ');
+    const tail = (disclosure ? '\n\n' + disclosure : '') + '\n\n' + tags.join(' ');
+    if ((desc + tail).length > 500) desc = body.filter(x => x !== s1).join(' ');
+    if ((desc + tail).length > 800) desc = trimTo(desc, 800 - tail.length);
+    const description = desc + tail;
+    const alt = trimTo(`${Short} outfit idea for ${se.S}. ${se.altTail}`, 500);
+    const keywords = Array.from(new Set([(colour ? colour + ' ' : '') + cat.noun + ' for women', ...se.kw, cat.kw[0]])).slice(0, 6);
+    const label = `${se.name}: ${st.key}`;
+    const text = `TITLE\n${ttl}\n\nDESCRIPTION\n${description}\n\nALT TEXT\n${alt}\n\nBOARD\n${se.board}\n\nKEYWORDS\n${keywords.join(', ')}`;
+    return {angle: a.id, season: se.id, label, title: ttl, description, hashtags: tags, alt, board: se.board, keywords, text};
+  }
+
   /* ---------- generating pins ---------- */
   function generate(inp) {
     const title = clean(inp.title), catId = inp.category || detectCategory(title), cat = CATS.find(c => c.id === catId) || CATS[CATS.length - 1];
@@ -136,7 +203,9 @@ const PP = (() => {
     const disclosure = inp.disclosure ? clean(inp.disclosure) : '';
     const fill = s => s.replace(/\{Short\}/g, Short).replace(/\{short\}/g, short).replace(/\{noun\}/g, cat.noun);
     const seedBase = hash(title + '|' + catId + '|' + colour);
-    return ANGLES.map(a => {
+    const se = seasonOf(inp.season);
+    return ANGLES.map((a, ai) => {
+      if (se) return seasonPin({a, ai, se, e, cat, Short, short, colour, details, bucket, disclosure, counter, seedBase, fill, alwaysPrice: inp.alwaysPrice});
       const r = rng(seedBase ^ hash(a.id + counter));
       const ttl = trimTo(fill(pick(a.titles[e], r)), 100);
       const hook = fill(pick(a.hooks, r));
@@ -161,6 +230,6 @@ const PP = (() => {
     general: 'Affiliate link: I may earn a small commission if you buy, at no extra cost to you.',
     amazon: 'As an Amazon Associate I earn from qualifying purchases.',
   };
-  return {generate, parseLink, checkAffiliate, applyTag, detectCategory, detectColour, shortName, priceBucket, titleFromSlug, CATS, ANGLES, DISCLOSURES, COLOURS};
+  return {generate, parseLink, checkAffiliate, applyTag, detectCategory, detectColour, shortName, priceBucket, titleFromSlug, CATS, ANGLES, SEASONS, SEASON_IDS, seasonOf, DISCLOSURES, COLOURS};
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = PP;
