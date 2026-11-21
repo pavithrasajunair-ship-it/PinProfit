@@ -1,4 +1,14 @@
 {
+  "rewrites": [
+    {
+      "source": "/(tests|docs)(/.*)?",
+      "destination": "/__blocked__"
+    },
+    {
+      "source": "/README\\.md",
+      "destination": "/__blocked__"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
